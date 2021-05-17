@@ -1,0 +1,17 @@
+Index: arch/amd64/amd64/lapic.c
+===================================================================
+RCS file: /cvs/src/sys/arch/amd64/amd64/lapic.c,v
+retrieving revision 1.57
+diff -u -p -r1.57 lapic.c
+--- arch/amd64/amd64/lapic.c	6 Sep 2020 20:50:00 -0000	1.57
++++ arch/amd64/amd64/lapic.c	16 May 2021 15:25:55 -0000
+@@ -300,7 +300,8 @@ lapic_set_lvt(void)
+ 		 *   #32559 revision 3.00
+ 		 */
+ 		if ((cpu_id & 0x00000f00) == 0x00000f00 &&
+-		    (cpu_id & 0x0fff0000) >= 0x00040000) {
++		    (cpu_id & 0x0fff0000) >= 0x00040000 &&
++		    (cpu_id & 0x0fff0000) < 0x00800000) {
+ 			uint64_t msr;
+ 
+ 			msr = rdmsr(MSR_INT_PEN_MSG);

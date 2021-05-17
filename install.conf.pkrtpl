@@ -1,0 +1,14 @@
+System hostname = openbsd
+Which network interface do you wish to configure = vio0
+IPv4 address for vio0 = dhcp
+IPv6 address for vio0 = none
+Which network interface do you wish to configure = done
+Password for root account = *
+Public ssh key for root account = ${ssh_public_key}
+Start sshd(8) by default = yes
+Allow root ssh login = prohibit-password
+Do you expect to run the X Window System = no
+What timezone are you in = Etc/UTC
+Location of sets = http
+Http server = cdn.openbsd.org
+Set name(s) = -man* -game* -x*

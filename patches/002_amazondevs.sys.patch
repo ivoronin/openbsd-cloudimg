@@ -1,0 +1,103 @@
+Index: dev/pci/pcidevs
+===================================================================
+RCS file: /cvs/src/sys/dev/pci/pcidevs,v
+retrieving revision 1.1967
+diff -u -p -r1.1967 pcidevs
+--- dev/pci/pcidevs	18 Apr 2021 00:21:53 -0000	1.1967
++++ dev/pci/pcidevs	16 May 2021 19:05:31 -0000
+@@ -340,6 +340,7 @@ vendor	SYMPHONY2	0x1c1c	Symphony Labs
+ vendor	SKHYNIX		0x1c5c	SK hynix
+ vendor	ADATA		0x1cc1	ADATA Technology
+ vendor	UMIS		0x1cc4	Union Memory
++vendor	AMAZON		0x1d0f	Amazon
+ vendor	AQUANTIA	0x1d6a	Aquantia
+ vendor	ROCKCHIP	0x1d87	Rockchip
+ vendor	TEKRAM2		0x1de1	Tekram
+@@ -677,6 +678,13 @@ product ALTIMA AC1000		0x03e8	AC1000
+ product ALTIMA AC1001		0x03e9	AC1001
+ product ALTIMA AC9100		0x03ea	AC9100
+ product ALTIMA AC1003		0x03eb	AC1003
++
++/* Amazon products */
++product	AMAZON NVME_EBS		0x8061	NVMe EBS Controller
++product	AMAZON NVME_SSD		0xcd01	NVMe SSD Controller
++product	AMAZON ENA		0xec20	Elastic Network Adapter (ENA)
++product	AMAZON EFA0		0xefa0	Elastic Fabric Adapter (EFA)
++product	AMAZON EFA1		0xefa1	Elastic Fabric Adapter (EFA)
+ 
+ /* Applied Micro Circuits products */
+ product AMCIRCUITS S5933	0x4750	S5933 PCI Matchmaker
+Index: dev/pci/pcidevs.h
+===================================================================
+RCS file: /cvs/src/sys/dev/pci/pcidevs.h,v
+retrieving revision 1.1961
+diff -u -p -r1.1961 pcidevs.h
+--- dev/pci/pcidevs.h	18 Apr 2021 00:21:58 -0000	1.1961
++++ dev/pci/pcidevs.h	16 May 2021 19:05:33 -0000
+@@ -345,6 +345,7 @@
+ #define	PCI_VENDOR_SKHYNIX	0x1c5c		/* SK hynix */
+ #define	PCI_VENDOR_ADATA	0x1cc1		/* ADATA Technology */
+ #define	PCI_VENDOR_UMIS	0x1cc4		/* Union Memory */
++#define	PCI_VENDOR_AMAZON	0x1d0f		/* Amazon */
+ #define	PCI_VENDOR_AQUANTIA	0x1d6a		/* Aquantia */
+ #define	PCI_VENDOR_ROCKCHIP	0x1d87		/* Rockchip */
+ #define	PCI_VENDOR_TEKRAM2	0x1de1		/* Tekram */
+@@ -682,6 +683,13 @@
+ #define	PCI_PRODUCT_ALTIMA_AC1001	0x03e9		/* AC1001 */
+ #define	PCI_PRODUCT_ALTIMA_AC9100	0x03ea		/* AC9100 */
+ #define	PCI_PRODUCT_ALTIMA_AC1003	0x03eb		/* AC1003 */
++
++/* Amazon products */
++#define	PCI_PRODUCT_AMAZON_NVME_EBS	0x8061		/* NVMe EBS Controller */
++#define	PCI_PRODUCT_AMAZON_NVME_SSD	0xcd01		/* NVMe SSD Controller */
++#define	PCI_PRODUCT_AMAZON_ENA	0xec20		/* Elastic Network Adapter (ENA) */
++#define	PCI_PRODUCT_AMAZON_EFA0	0xefa0		/* Elastic Fabric Adapter (EFA) */
++#define	PCI_PRODUCT_AMAZON_EFA1	0xefa1		/* Elastic Fabric Adapter (EFA) */
+ 
+ /* Applied Micro Circuits products */
+ #define	PCI_PRODUCT_AMCIRCUITS_S5933	0x4750		/* S5933 PCI Matchmaker */
+Index: dev/pci/pcidevs_data.h
+===================================================================
+RCS file: /cvs/src/sys/dev/pci/pcidevs_data.h,v
+retrieving revision 1.1956
+diff -u -p -r1.1956 pcidevs_data.h
+--- dev/pci/pcidevs_data.h	18 Apr 2021 00:21:58 -0000	1.1956
++++ dev/pci/pcidevs_data.h	16 May 2021 19:05:34 -0000
+@@ -1036,6 +1036,26 @@ static const struct pci_known_product pc
+ 	    "AC1003",
+ 	},
+ 	{
++	    PCI_VENDOR_AMAZON, PCI_PRODUCT_AMAZON_NVME_EBS,
++	    "NVMe EBS Controller",
++	},
++	{
++	    PCI_VENDOR_AMAZON, PCI_PRODUCT_AMAZON_NVME_SSD,
++	    "NVMe SSD Controller",
++	},
++	{
++	    PCI_VENDOR_AMAZON, PCI_PRODUCT_AMAZON_ENA,
++	    "Elastic Network Adapter (ENA)",
++	},
++	{
++	    PCI_VENDOR_AMAZON, PCI_PRODUCT_AMAZON_EFA0,
++	    "Elastic Fabric Adapter (EFA)",
++	},
++	{
++	    PCI_VENDOR_AMAZON, PCI_PRODUCT_AMAZON_EFA1,
++	    "Elastic Fabric Adapter (EFA)",
++	},
++	{
+ 	    PCI_VENDOR_AMCIRCUITS, PCI_PRODUCT_AMCIRCUITS_S5933,
+ 	    "S5933 PCI Matchmaker",
+ 	},
+@@ -33018,6 +33038,10 @@ static const struct pci_known_vendor pci
+ 	{
+ 	    PCI_VENDOR_UMIS,
+ 	    "Union Memory",
++	},
++	{
++	    PCI_VENDOR_AMAZON,
++	    "Amazon",
+ 	},
+ 	{
+ 	    PCI_VENDOR_AQUANTIA,
