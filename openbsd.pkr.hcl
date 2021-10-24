@@ -1,7 +1,7 @@
 packer {
   required_plugins {
     sshkey = {
-      version = ">= 0.0.2"
+      version = ">= 0.1.0"
       source  = "github.com/ivoronin/sshkey"
     }
     amazon = {
@@ -11,7 +11,7 @@ packer {
   }
 }
 
-data "sshkey-sshkey" "install" {
+data "sshkey" "install" {
 }
 
 locals {
@@ -37,11 +37,11 @@ source "qemu" "install" {
   ]
   boot_wait = "20s"
   http_content = {
-    "/install.conf" = templatefile("install.conf.pkrtpl", { "ssh_public_key" : data.sshkey-sshkey.install.public_key })
+    "/install.conf" = templatefile("install.conf.pkrtpl", { "ssh_public_key" : data.sshkey.install.public_key })
   }
   shutdown_command = "halt -p"
 
-  ssh_private_key_file = data.sshkey-sshkey.install.private_key_path
+  ssh_private_key_file = data.sshkey.install.private_key_path
   ssh_username         = "root"
 
   // vnc_bind_address     = "0.0.0.0"
