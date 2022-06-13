@@ -7,4 +7,4 @@ rm -v \
   /etc/iked/private/local.key \
   /etc/iked/local.pub \
   /etc/soii.key \
-  /var/db/dhclient.leases.*
+  /var/db/dhcpleased/*
