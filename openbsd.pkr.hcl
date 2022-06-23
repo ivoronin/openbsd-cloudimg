@@ -16,20 +16,10 @@ locals {
   tag        = replace(local.ver, ".", "")
   image_name = "openbsd-${local.tag}-${formatdate("YYYYMMDDhhmm", timestamp())}"
 }
-/*
- # pip3 install -U bcrypt && python3
- >> import bcrypy
- >> bcrypt.hashpw(b'password', bcrypt.gensalt(14)).decode('utf-8')
- # export PKR_VAR_root_password='$2b$...'
-*/
-variable "root_password" {
-  type    = string
-  default = "*"
-}
 
 source "qemu" "install" {
-  vm_name          = source.name
-  output_directory = "output"
+  vm_name          = "openbsd-${source.name}.raw"
+  output_directory = "output/${source.name}"
 
   iso_checksum = "file:https://ftp.openbsd.org/pub/OpenBSD/${local.ver}/amd64/SHA256"
   iso_url      = "https://ftp.openbsd.org/pub/OpenBSD/${local.ver}/amd64/install${local.tag}.iso"
@@ -60,36 +50,32 @@ source "qemu" "install" {
 
 build {
   source "source.qemu.install" {
-    name = "base.raw"
+    name = "base"
     http_content = {
       "/install.conf" = templatefile("install.conf.pkrtpl", {
-        "root_password" : var.root_password,
         "ssh_public_key" : data.sshkey.install.public_key,
         "sets" : "-man* -game* -x* -comp*"
       })
     }
   }
   source "source.qemu.install" {
-    name = "full.raw"
+    name = "full"
     http_content = {
       "/install.conf" = templatefile("install.conf.pkrtpl", {
-        "root_password" : var.root_password,
         "ssh_public_key" : data.sshkey.install.public_key,
         "sets" : "*",
       })
     }
   }
-  /*
   provisioner "file" {
     source      = "cloud-init.sh"
     destination = "/usr/local/sbin/cloud-init"
   }
-  */
   provisioner "shell" {
     scripts = [
-      "post-install/syspatch.sh",
-      // "post-install/cloud.sh",
-      "post-install/cleanup.sh",
+      "scripts/syspatch.sh",
+      "scripts/cloud.sh",
+      "scripts/cleanup.sh",
     ]
   }
 }
