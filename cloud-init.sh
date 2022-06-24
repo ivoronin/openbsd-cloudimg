@@ -29,7 +29,10 @@ setup_local_hostname() {
 	echo "${LOCAL_HOSTNAME}" > /etc/myname
 	hostname "${LOCAL_HOSTNAME}"
 	LOCAL_SHORTNAME="$(echo ${LOCAL_HOSTNAME} | cut -d. -f1)"
-	LOCAL_NAMES="localhost ${LOCAL_SHORTNAME} ${LOCAL_HOSTNAME}"
+	LOCAL_NAMES="localhost ${LOCAL_SHORTNAME}"
+	if [ "${LOCAL_SHORTNAME}" != "${LOCAL_HOSTNAME}" ]; then
+		LOCAL_NAMES="${LOCAL_NAMES} ${LOCAL_HOSTNAME}"
+	fi
 	sed -i -e "s/^127.0.0.1[[:space:]].*/127.0.0.1 ${LOCAL_NAMES}/" \
 		-e "s/^::1[[:space:]].*/::1 ${LOCAL_NAMES}/" /etc/hosts
 }

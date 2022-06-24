@@ -15,6 +15,14 @@ locals {
   ver        = "7.1"
   tag        = replace(local.ver, ".", "")
   image_name = "openbsd-${local.tag}-${formatdate("YYYYMMDDhhmm", timestamp())}"
+  sets = {
+    "base" = "-man* -game* -x* -comp*",
+    "full" = "*"
+  }
+  disk_size = {
+    "base" = "10G",
+    "full" = "20G"
+  }
 }
 
 source "qemu" "install" {
@@ -24,7 +32,14 @@ source "qemu" "install" {
   iso_checksum = "file:https://ftp.openbsd.org/pub/OpenBSD/${local.ver}/amd64/SHA256"
   iso_url      = "https://ftp.openbsd.org/pub/OpenBSD/${local.ver}/amd64/install${local.tag}.iso"
 
-  disk_size      = "5G"
+  http_content = {
+    "/install.conf" = templatefile("install.conf.pkrtpl", {
+      "ssh_public_key" : data.sshkey.install.public_key,
+      "sets" : local.sets[source.name]
+    })
+  }
+
+  disk_size      = local.disk_size[source.name]
   disk_interface = "virtio"
   cpus           = 1
   headless       = true
@@ -51,21 +66,9 @@ source "qemu" "install" {
 build {
   source "source.qemu.install" {
     name = "base"
-    http_content = {
-      "/install.conf" = templatefile("install.conf.pkrtpl", {
-        "ssh_public_key" : data.sshkey.install.public_key,
-        "sets" : "-man* -game* -x* -comp*"
-      })
-    }
   }
   source "source.qemu.install" {
     name = "full"
-    http_content = {
-      "/install.conf" = templatefile("install.conf.pkrtpl", {
-        "ssh_public_key" : data.sshkey.install.public_key,
-        "sets" : "*",
-      })
-    }
   }
   provisioner "file" {
     source      = "cloud-init.sh"
