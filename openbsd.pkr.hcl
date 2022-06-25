@@ -21,7 +21,7 @@ locals {
   }
   disk_size = {
     "base" = "10G",
-    "full" = "20G"
+    "full" = "40G"
   }
 }
 
