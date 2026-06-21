@@ -49,7 +49,7 @@ jobs:
       - name: Install QEMU and Packer
         run: |
           sudo apt-get update
-          sudo apt-get install -y qemu-system-x86 qemu-utils xz-utils
+          sudo apt-get install -y qemu-system-x86 qemu-utils zstd
           wget -q "https://releases.hashicorp.com/packer/${PACKER_VERSION}/packer_${PACKER_VERSION}_linux_amd64.zip"
           sudo unzip -o "packer_${PACKER_VERSION}_linux_amd64.zip" -d /usr/local/bin
           packer version
@@ -84,7 +84,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: openbsd-${{ matrix.image.version }}-${{ matrix.image.arch }}-${{ matrix.flavor }}
-          path: output/${{ matrix.flavor }}/*.img.xz
+          path: output/${{ matrix.flavor }}/*.img.zst
           if-no-files-found: error
 
   release:
@@ -109,18 +109,18 @@ jobs:
       - name: Stamp assets
         run: |
           cd dist
-          for f in *.img.xz; do
-            mv "$f" "${f%.img.xz}-${GITREF}-${TS}.img.xz"
+          for f in *.img.zst; do
+            mv "$f" "${f%.img.zst}-${GITREF}-${TS}.img.zst"
           done
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
-          subject-path: dist/*.img.xz
+          subject-path: dist/*.img.zst
 
       - name: Publish release
         run: |
-          gh release create "$TS" dist/*.img.xz \
+          gh release create "$TS" dist/*.img.zst \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "OpenBSD images $TS" \

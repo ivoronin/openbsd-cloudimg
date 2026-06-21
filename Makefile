@@ -6,15 +6,15 @@ ISO_CHECKSUM ?= $(shell jq -r '.[] | select(.version=="$(VER)" and .arch=="$(ARC
 
 NAME  = openbsd-$(VER)-$(ARCH)-$(FLAVOR)
 OUT   = output/$(FLAVOR)
-IMG   = $(OUT)/$(NAME).img
-IMGXZ = $(OUT)/$(NAME).img.xz
+IMG    = $(OUT)/$(NAME).img
+IMGZST = $(OUT)/$(NAME).img.zst
 
 SOURCES = openbsd.pkr.hcl install.conf.pkrtpl cloud-init.sh $(wildcard scripts/*)
 
 .PHONY: build smoke clean
 .SUFFIXES:
 
-build: $(IMGXZ)
+build: $(IMGZST)
 
 smoke: $(IMG)
 	packer init test.pkr.hcl
@@ -30,8 +30,8 @@ $(IMG): $(SOURCES) images.json
 	  -var iso_checksum=$(ISO_CHECKSUM) \
 	  openbsd.pkr.hcl
 
-$(IMGXZ): $(IMG)
-	xz -9 -T0 -c $< > $@
+$(IMGZST): $(IMG)
+	zstd -T0 -19 --long=27 -f -o $@ $<
 
 clean:
 	rm -rf output

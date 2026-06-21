@@ -4,7 +4,7 @@ Packer template that builds OpenBSD cloud images with QEMU, fanned out by GitHub
 
 ## Build
 
-Needs an amd64 Linux host with KVM, Packer 1.15.4+, QEMU, xz and jq.
+Needs an amd64 Linux host with KVM, Packer 1.15.4+, QEMU, zstd and jq.
 
 ```
 make build VER=7.9 ARCH=amd64 FLAVOR=base
