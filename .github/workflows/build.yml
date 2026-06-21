@@ -85,6 +85,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     env:
       GH_TOKEN: ${{ github.token }}
       TS: ${{ needs.setup.outputs.timestamp }}
@@ -103,10 +105,15 @@ jobs:
             mv "$f" "${f%.img.xz}-${GITREF}-${TS}.img.xz"
           done
 
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-path: dist/*.img.xz
+
       - name: Publish release
         run: |
           gh release create "$TS" dist/*.img.xz \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "OpenBSD images $TS" \
-            --notes "OpenBSD cloud images (flavors base and full) built from commit \`$GITREF\`."
+            --notes "OpenBSD cloud images built from commit \`$GITREF\`"
