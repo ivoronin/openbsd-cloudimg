@@ -11,10 +11,12 @@ IMGZST = $(OUT)/$(NAME).img.zst
 
 SOURCES = openbsd.pkr.hcl install.conf.pkrtpl cloud-init.sh $(wildcard scripts/*)
 
-.PHONY: build smoke clean
+.PHONY: build smoke compress clean
 .SUFFIXES:
 
-build: $(IMGZST)
+build: $(IMG)
+
+compress: $(IMGZST)
 
 smoke: $(IMG)
 	packer init test.pkr.hcl
