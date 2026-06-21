@@ -57,7 +57,7 @@ locals {
 }
 
 source "qemu" "install" {
-  vm_name          = "${local.image_name}.raw"
+  vm_name          = "${local.image_name}.img"
   output_directory = "output/${var.flavor}"
 
   iso_checksum = var.iso_checksum

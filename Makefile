@@ -6,18 +6,17 @@ ISO_CHECKSUM ?= $(shell jq -r '.[] | select(.version=="$(VER)" and .arch=="$(ARC
 
 NAME  = openbsd-$(VER)-$(ARCH)-$(FLAVOR)
 OUT   = output/$(FLAVOR)
-RAW   = $(OUT)/$(NAME).raw
-QCOW2 = $(OUT)/$(NAME).qcow2
-RAWGZ = $(OUT)/$(NAME).raw.gz
+IMG   = $(OUT)/$(NAME).img
+IMGXZ = $(OUT)/$(NAME).img.xz
 
 SOURCES = openbsd.pkr.hcl install.conf.pkrtpl cloud-init.sh $(wildcard scripts/*)
 
 .PHONY: build clean
 .SUFFIXES:
 
-build: $(QCOW2) $(RAWGZ)
+build: $(IMGXZ)
 
-$(RAW): $(SOURCES) images.json
+$(IMG): $(SOURCES) images.json
 	packer init openbsd.pkr.hcl
 	packer build -force \
 	  -var version=$(VER) \
@@ -27,11 +26,8 @@ $(RAW): $(SOURCES) images.json
 	  -var iso_checksum=$(ISO_CHECKSUM) \
 	  openbsd.pkr.hcl
 
-$(QCOW2): $(RAW)
-	qemu-img convert -c -f raw -O qcow2 $< $@
-
-$(RAWGZ): $(RAW)
-	gzip -9c < $< > $@
+$(IMGXZ): $(IMG)
+	xz -9 -T0 -c $< > $@
 
 clean:
 	rm -rf output

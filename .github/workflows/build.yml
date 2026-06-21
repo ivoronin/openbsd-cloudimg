@@ -3,7 +3,6 @@ name: build
 on:
   push:
     branches: [main]
-    tags: ['*']
   pull_request:
   workflow_dispatch:
 
@@ -18,10 +17,15 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       images: ${{ steps.gen.outputs.images }}
+      timestamp: ${{ steps.gen.outputs.timestamp }}
+      gitref: ${{ steps.gen.outputs.gitref }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - id: gen
-        run: echo "images=$(jq -c . images.json)" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "images=$(jq -c . images.json)" >> "$GITHUB_OUTPUT"
+          echo "timestamp=$(date -u +%Y%m%d%H%M)" >> "$GITHUB_OUTPUT"
+          echo "gitref=${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
 
   build:
     needs: setup
@@ -45,7 +49,7 @@ jobs:
       - name: Install QEMU and Packer
         run: |
           sudo apt-get update
-          sudo apt-get install -y qemu-system-x86 qemu-utils
+          sudo apt-get install -y qemu-system-x86 qemu-utils xz-utils
           wget -q "https://releases.hashicorp.com/packer/${PACKER_VERSION}/packer_${PACKER_VERSION}_linux_amd64.zip"
           sudo unzip -o "packer_${PACKER_VERSION}_linux_amd64.zip" -d /usr/local/bin
           packer version
@@ -60,7 +64,7 @@ jobs:
         env:
           PACKER_CACHE_DIR: packer_cache
         run: |
-          make build -j2 \
+          make build \
             VER="${{ matrix.image.version }}" \
             ARCH="${{ matrix.image.arch }}" \
             FLAVOR="${{ matrix.flavor }}" \
@@ -68,11 +72,41 @@ jobs:
             ISO_CHECKSUM="${{ matrix.image.iso_checksum }}"
 
       - name: Upload artifacts
-        if: ${{ github.event_name == 'pull_request' || startsWith(github.ref, 'refs/tags/') }}
+        if: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: openbsd-${{ matrix.image.version }}-${{ matrix.image.arch }}-${{ matrix.flavor }}
-          path: |
-            output/${{ matrix.flavor }}/*.qcow2
-            output/${{ matrix.flavor }}/*.raw.gz
+          path: output/${{ matrix.flavor }}/*.img.xz
           if-no-files-found: error
+
+  release:
+    needs: [setup, build]
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TS: ${{ needs.setup.outputs.timestamp }}
+      GITREF: ${{ needs.setup.outputs.gitref }}
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Stamp assets
+        run: |
+          cd dist
+          for f in *.img.xz; do
+            mv "$f" "${f%.img.xz}-${GITREF}-${TS}.img.xz"
+          done
+
+      - name: Publish release
+        run: |
+          gh release create "$TS" dist/*.img.xz \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "OpenBSD images $TS" \
+            --notes "OpenBSD cloud images (flavors base and full) built from commit \`$GITREF\`."
