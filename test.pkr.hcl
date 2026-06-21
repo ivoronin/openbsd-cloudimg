@@ -50,13 +50,15 @@ source "qemu" "smoke" {
     "/latest/meta-data/local-hostname"            = "smoke-test"
   }
 
-  # SLIRP only accepts a guestfwd whose guest address is inside the guest
-  # network, so move the whole network into link-local 169.254.0.0/16. That
-  # lets us forward the fixed IMDS address 169.254.169.254:80 to Packer's HTTP
-  # server, which listens on {{ .HTTPIP }} (not loopback). hostfwd still reaches
+  # Two SLIRP quirks: (1) a guestfwd's guest address must sit inside the guest
+  # network, so move the network into link-local 169.254.0.0/16 to host the
+  # fixed IMDS address 169.254.169.254; (2) the guestfwd target is a host-side
+  # connect, so it must point at Packer's HTTP server on the host loopback,
+  # NOT {{ .HTTPIP }} - that resolves to the guest-facing gateway 10.0.2.2,
+  # which the host cannot connect to (qemu then exits at boot). hostfwd reaches
   # sshd regardless of the guest's address.
   qemuargs = [
-    ["-netdev", "user,id=n0,net=169.254.0.0/16,host=169.254.0.2,dhcpstart=169.254.0.15,hostfwd=tcp::{{ .SSHHostPort }}-:22,guestfwd=tcp:169.254.169.254:80-tcp:{{ .HTTPIP }}:{{ .HTTPPort }}"],
+    ["-netdev", "user,id=n0,net=169.254.0.0/16,host=169.254.0.2,dhcpstart=169.254.0.15,hostfwd=tcp::{{ .SSHHostPort }}-:22,guestfwd=tcp:169.254.169.254:80-tcp:127.0.0.1:{{ .HTTPPort }}"],
     ["-device", "virtio-net,netdev=n0"],
   ]
 
