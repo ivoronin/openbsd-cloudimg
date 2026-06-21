@@ -1,5 +1,9 @@
 packer {
   required_plugins {
+    qemu = {
+      version = "1.1.5"
+      source  = "github.com/hashicorp/qemu"
+    }
     sshkey = {
       version = "1.3.0"
       source  = "github.com/ivoronin/sshkey"
