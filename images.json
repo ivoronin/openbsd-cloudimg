@@ -1,0 +1,12 @@
+[
+  {
+    "version": "7.8",
+    "arch": "amd64",
+    "iso_checksum": "sha256:a228d0a1ef558b4d9ec84c698f0d3ffd13cd38c64149487cba0f1ad873be07b2"
+  },
+  {
+    "version": "7.9",
+    "arch": "amd64",
+    "iso_checksum": "sha256:7a4a92e953618035097c796a90b54424a0f3ae775552e1e7d102cf8a5130449f"
+  }
+]

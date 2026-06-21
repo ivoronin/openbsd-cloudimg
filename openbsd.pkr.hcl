@@ -1,10 +1,38 @@
 packer {
   required_plugins {
     sshkey = {
-      version = ">= 1.0.0"
+      version = "1.3.0"
       source  = "github.com/ivoronin/sshkey"
     }
   }
+}
+
+variable "version" {
+  type        = string
+  description = "OpenBSD release, e.g. 7.9"
+}
+
+variable "arch" {
+  type        = string
+  description = "Target architecture, e.g. amd64"
+  default     = "amd64"
+}
+
+variable "iso_checksum" {
+  type        = string
+  description = "Pinned installer ISO checksum, e.g. sha256:abc..."
+}
+
+variable "flavor" {
+  type        = string
+  description = "Image flavor: base (minimal) or full (all sets)"
+  default     = "base"
+}
+
+variable "accelerator" {
+  type        = string
+  description = "QEMU accelerator: kvm (CI), tcg, hvf or none"
+  default     = "kvm"
 }
 
 data "sshkey" "install" {
@@ -12,39 +40,41 @@ data "sshkey" "install" {
 }
 
 locals {
-  ver        = "7.1"
-  tag        = replace(local.ver, ".", "")
-  image_name = "openbsd-${local.tag}-${formatdate("YYYYMMDDhhmm", timestamp())}"
+  tag        = replace(var.version, ".", "")
+  image_name = "openbsd-${var.version}-${var.arch}-${var.flavor}"
   sets = {
-    "base" = "-man* -game* -x* -comp*",
-    "full" = "*"
+    base = "-man* -game* -x* -comp*"
+    full = "*"
   }
   disk_size = {
-    "base" = "10G",
-    "full" = "40G"
+    base = "10G"
+    full = "40G"
   }
 }
 
 source "qemu" "install" {
-  vm_name          = "openbsd-${source.name}.raw"
-  output_directory = "output/${source.name}"
+  vm_name          = "${local.image_name}.raw"
+  output_directory = "output/${var.flavor}"
 
-  iso_checksum = "file:https://ftp.openbsd.org/pub/OpenBSD/${local.ver}/amd64/SHA256"
-  iso_url      = "https://ftp.openbsd.org/pub/OpenBSD/${local.ver}/amd64/install${local.tag}.iso"
+  iso_checksum = var.iso_checksum
+  iso_url      = "https://cdn.openbsd.org/pub/OpenBSD/${var.version}/${var.arch}/install${local.tag}.iso"
 
   http_content = {
     "/install.conf" = templatefile("install.conf.pkrtpl", {
       "ssh_public_key" : data.sshkey.install.public_key,
-      "sets" : local.sets[source.name]
+      "sets" : local.sets[var.flavor]
     })
   }
 
-  disk_size      = local.disk_size[source.name]
+  accelerator    = var.accelerator
+  disk_size      = local.disk_size[var.flavor]
   disk_interface = "virtio"
   cpus           = 1
   headless       = true
   format         = "raw"
 
+  # boot_command and the com0 serial console (see install.conf.pkrtpl) are
+  # amd64/BIOS-specific; arm64 will need a UEFI boot sequence and its own console.
   boot_command = [
     "A<enter><wait>",
     "http://{{ .HTTPIP }}:{{ .HTTPPort }}/install.conf<enter>"
@@ -55,21 +85,11 @@ source "qemu" "install" {
   ssh_private_key_file = data.sshkey.install.private_key_path
   ssh_username         = "root"
   ssh_timeout          = "15m"
-
-  /*
-  vnc_bind_address     = "0.0.0.0"
-  vnc_port_min         = "5900"
-  vnc_port_max         = "5900"
-  */
 }
 
 build {
-  source "source.qemu.install" {
-    name = "base"
-  }
-  source "source.qemu.install" {
-    name = "full"
-  }
+  sources = ["source.qemu.install"]
+
   provisioner "file" {
     source      = "cloud-init.sh"
     destination = "/usr/local/sbin/cloud-init"

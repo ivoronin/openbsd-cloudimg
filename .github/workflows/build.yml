@@ -1,0 +1,78 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PACKER_VERSION: 1.15.4
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.gen.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - id: gen
+        run: |
+          matrix=$(jq -c '{include: [ .[] as $img | ("base","full") | {version:$img.version, arch:$img.arch, iso_checksum:$img.iso_checksum, flavor:.} ]}' images.json)
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: setup
+    runs-on: ubuntu-latest
+    name: ${{ matrix.version }}-${{ matrix.arch }}-${{ matrix.flavor }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install QEMU and Packer
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 qemu-utils
+          wget -q "https://releases.hashicorp.com/packer/${PACKER_VERSION}/packer_${PACKER_VERSION}_linux_amd64.zip"
+          sudo unzip -o "packer_${PACKER_VERSION}_linux_amd64.zip" -d /usr/local/bin
+          packer version
+
+      - name: Cache OpenBSD ISO
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: packer_cache
+          key: openbsd-iso-${{ matrix.version }}-${{ matrix.arch }}-${{ matrix.iso_checksum }}
+
+      - name: Build image
+        env:
+          PACKER_CACHE_DIR: packer_cache
+        run: |
+          make build -j2 \
+            VER="${{ matrix.version }}" \
+            ARCH="${{ matrix.arch }}" \
+            FLAVOR="${{ matrix.flavor }}" \
+            ACCEL=kvm \
+            ISO_CHECKSUM="${{ matrix.iso_checksum }}"
+
+      - name: Upload artifacts
+        if: ${{ github.event_name == 'pull_request' || startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: openbsd-${{ matrix.version }}-${{ matrix.arch }}-${{ matrix.flavor }}
+          path: |
+            output/${{ matrix.flavor }}/*.qcow2
+            output/${{ matrix.flavor }}/*.raw.gz
+          if-no-files-found: error
