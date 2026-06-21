@@ -40,7 +40,7 @@ source "qemu" "smoke" {
   iso_checksum     = "none"
   skip_resize_disk = true
   disk_interface   = "virtio"
-  format           = "qcow2"
+  format           = "raw"
 
   accelerator = var.accelerator
   headless    = true
