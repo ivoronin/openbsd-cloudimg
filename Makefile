@@ -11,10 +11,14 @@ IMGXZ = $(OUT)/$(NAME).img.xz
 
 SOURCES = openbsd.pkr.hcl install.conf.pkrtpl cloud-init.sh $(wildcard scripts/*)
 
-.PHONY: build clean
+.PHONY: build smoke clean
 .SUFFIXES:
 
 build: $(IMGXZ)
+
+smoke: $(IMG)
+	packer init test.pkr.hcl
+	packer build -force -var image=$(IMG) -var accelerator=$(ACCEL) test.pkr.hcl
 
 $(IMG): $(SOURCES) images.json
 	packer init openbsd.pkr.hcl
