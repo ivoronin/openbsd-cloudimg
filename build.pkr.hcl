@@ -98,14 +98,15 @@ locals {
     amd64 = "pc"
     arm64 = "virt"
   }
-  # arm64 on "virt" needs: the host CPU model; a framebuffer (virtio-gpu) plus a
-  # USB keyboard (virt has no PS/2) so the boot_command types over VNC; and EFI
-  # mode (efi_firmware_*), which makes Packer skip the x86-only "-boot" that virt
-  # rejects.
+  # arm64 on "virt" needs: a CPU model (host passthrough under kvm/hvf, but tcg
+  # emulation rejects -cpu host, so a concrete core there); a framebuffer
+  # (virtio-gpu) plus a USB keyboard (virt has no PS/2) so the boot_command types
+  # over VNC; and EFI mode (efi_firmware_*), which makes Packer skip the x86-only
+  # "-boot" that virt rejects.
   qemuargs = {
     amd64 = []
     arm64 = [
-      ["-cpu", "host"],
+      ["-cpu", var.accelerator == "tcg" ? "cortex-a72" : "host"],
       ["-device", "virtio-gpu-pci"],
       ["-device", "qemu-xhci"], ["-device", "usb-kbd"],
       # disk_interface and cdrom_interface=virtio-scsi make Packer build BOTH the

@@ -73,12 +73,14 @@ locals {
     ["-netdev", local.netdev],
     ["-device", "virtio-net,netdev=n0"],
   ]
-  # arm64 "virt" has no default display or PS/2 keyboard; add a virtio-gpu frame-
-  # buffer and a USB keyboard so Packer's VNC connection works and a human can
-  # watch/type at the console while debugging. amd64 needs neither.
+  # arm64 "virt" needs a CPU model (host passthrough under kvm/hvf, but tcg
+  # emulation rejects -cpu host, so a concrete core there). It also has no default
+  # display or PS/2 keyboard; add a virtio-gpu framebuffer and a USB keyboard so
+  # Packer's VNC connection works and a human can watch/type at the console while
+  # debugging. amd64 needs neither.
   arch_qemuargs = {
     amd64 = []
-    arm64 = [["-cpu", "host"], ["-device", "virtio-gpu-pci"], ["-device", "qemu-xhci"], ["-device", "usb-kbd"]]
+    arm64 = [["-cpu", var.accelerator == "tcg" ? "cortex-a72" : "host"], ["-device", "virtio-gpu-pci"], ["-device", "qemu-xhci"], ["-device", "usb-kbd"]]
   }
 }
 
