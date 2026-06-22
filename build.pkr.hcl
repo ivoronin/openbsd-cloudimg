@@ -173,7 +173,7 @@ build {
   # with gohcl against ectx), so except-ing the sole source conditionally skips a
   # whole provisioner - Packer's only lever to drop one.
   provisioner "file" {
-    source      = "cloud-init.sh"
+    source      = "cloud-init.pl"
     destination = "/usr/local/sbin/cloud-init"
     except      = var.disable_cloud_init ? ["qemu.install"] : []
   }

@@ -18,7 +18,7 @@ OUT    = output/build/$(ARCH)/$(VER)/$(FLAVOR)
 IMG    = $(OUT)/$(NAME).img
 IMGGZ  = $(OUT)/$(NAME).img.gz
 
-SOURCES = build.pkr.hcl install.conf.pkrtpl cloud-init.sh $(wildcard scripts/*)
+SOURCES = build.pkr.hcl install.conf.pkrtpl cloud-init.pl $(wildcard scripts/*)
 
 .PHONY: build smoke compress clean
 .SUFFIXES:
