@@ -103,6 +103,9 @@ source "qemu" "install" {
 
   iso_checksum = var.iso_checksum
   iso_url      = "https://cdn.openbsd.org/pub/OpenBSD/${var.version}/${var.arch}/install${local.tag}.iso"
+  # Keep the installer ISO in a predictable iso/ dir (reused across base/full and
+  # across runs when the checksum matches) instead of Packer's hash-named cache.
+  iso_target_path = "iso/openbsd-${var.version}-${var.arch}.iso"
 
   http_content = {
     "/install.conf" = templatefile("install.conf.pkrtpl", {

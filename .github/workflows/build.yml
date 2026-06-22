@@ -68,12 +68,10 @@ jobs:
       - name: Cache OpenBSD ISO
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
-          path: packer_cache
+          path: iso
           key: openbsd-iso-${{ matrix.image.version }}-${{ matrix.image.arch }}-${{ matrix.image.iso_checksum }}
 
       - name: Build image
-        env:
-          PACKER_CACHE_DIR: packer_cache
         run: |
           make build \
             VER="${{ matrix.image.version }}" \

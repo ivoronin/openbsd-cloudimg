@@ -13,7 +13,7 @@ OUT    = output/build/$(ARCH)/$(VER)/$(FLAVOR)
 IMG    = $(OUT)/$(NAME).img
 IMGGZ  = $(OUT)/$(NAME).img.gz
 
-SOURCES = openbsd.pkr.hcl install.conf.pkrtpl cloud-init.sh $(wildcard scripts/*)
+SOURCES = build.pkr.hcl install.conf.pkrtpl cloud-init.sh $(wildcard scripts/*)
 
 .PHONY: build smoke compress clean
 .SUFFIXES:
@@ -23,11 +23,11 @@ build: $(IMG)
 compress: $(IMGGZ)
 
 smoke: $(IMG)
-	packer init test.pkr.hcl
-	packer build -force -var image=$(IMG) -var version=$(VER) -var arch=$(ARCH) -var flavor=$(FLAVOR) -var accelerator=$(ACCEL) -var efi_code=$(EFI_CODE) -var efi_vars=$(EFI_VARS) test.pkr.hcl
+	packer init smoke.pkr.hcl
+	packer build -force -var image=$(IMG) -var version=$(VER) -var arch=$(ARCH) -var flavor=$(FLAVOR) -var accelerator=$(ACCEL) -var efi_code=$(EFI_CODE) -var efi_vars=$(EFI_VARS) smoke.pkr.hcl
 
 $(IMG): $(SOURCES) images.json
-	packer init openbsd.pkr.hcl
+	packer init build.pkr.hcl
 	packer build -force \
 	  -var version=$(VER) \
 	  -var arch=$(ARCH) \
@@ -36,7 +36,7 @@ $(IMG): $(SOURCES) images.json
 	  -var iso_checksum=$(ISO_CHECKSUM) \
 	  -var efi_code=$(EFI_CODE) \
 	  -var efi_vars=$(EFI_VARS) \
-	  openbsd.pkr.hcl
+	  build.pkr.hcl
 
 $(IMGGZ): $(IMG)
 	pigz -9 -c $< > $@

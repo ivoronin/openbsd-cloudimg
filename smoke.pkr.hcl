@@ -124,6 +124,15 @@ build {
   sources = ["source.qemu.smoke"]
 
   provisioner "shell" {
-    scripts = ["test/checks.sh"]
+    # Login already proves boot, cloud-init, and ssh-key injection; assert that
+    # cloud-init also applied the IMDS-provided local-hostname.
+    inline = [<<-EOT
+      if [ "$(hostname)" != smoke-test ]; then
+        echo "hostname is '$(hostname)', expected smoke-test" >&2
+        exit 1
+      fi
+      echo "smoke checks passed"
+    EOT
+    ]
   }
 }
