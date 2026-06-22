@@ -60,7 +60,7 @@ jobs:
           sudo rm -f /etc/apt/sources.list /etc/apt/sources.list.d/*
           printf 'Types: deb\nURIs: https://snapshot.ubuntu.com/ubuntu/%s\nSuites: noble noble-updates noble-security\nComponents: main restricted universe multiverse\nSigned-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n' "$APT_SNAPSHOT" | sudo tee /etc/apt/sources.list.d/snapshot.sources >/dev/null
           sudo apt-get update
-          sudo apt-get install -y qemu-system-x86 qemu-utils zstd netcat-openbsd
+          sudo apt-get install -y qemu-system-x86 qemu-utils pigz netcat-openbsd
           wget -q "https://releases.hashicorp.com/packer/${PACKER_VERSION}/packer_${PACKER_VERSION}_linux_amd64.zip"
           sudo unzip -o "packer_${PACKER_VERSION}_linux_amd64.zip" -d /usr/local/bin
           packer version
@@ -103,7 +103,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: openbsd-${{ matrix.image.version }}-${{ matrix.image.arch }}-${{ matrix.flavor }}
-          path: output/${{ matrix.flavor }}/*.img.zst
+          path: output/build/${{ matrix.image.arch }}/${{ matrix.image.version }}/${{ matrix.flavor }}/*.img.gz
           if-no-files-found: error
 
   release:
@@ -128,18 +128,18 @@ jobs:
       - name: Stamp assets
         run: |
           cd dist
-          for f in *.img.zst; do
-            mv "$f" "${f%.img.zst}-${GITREF}-${TS}.img.zst"
+          for f in *.img.gz; do
+            mv "$f" "${f%.img.gz}-${GITREF}-${TS}.img.gz"
           done
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
-          subject-path: dist/*.img.zst
+          subject-path: dist/*.img.gz
 
       - name: Publish release
         run: |
-          gh release create "$TS" dist/*.img.zst \
+          gh release create "$TS" dist/*.img.gz \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "OpenBSD images $TS" \

@@ -99,7 +99,7 @@ locals {
 
 source "qemu" "install" {
   vm_name          = "${local.image_name}.img"
-  output_directory = "output/${var.flavor}"
+  output_directory = "output/build/${var.arch}/${var.version}/${var.flavor}"
 
   iso_checksum = var.iso_checksum
   iso_url      = "https://cdn.openbsd.org/pub/OpenBSD/${var.version}/${var.arch}/install${local.tag}.iso"

@@ -9,9 +9,9 @@ EFI_VARS     ?= $(firstword $(wildcard /opt/homebrew/share/qemu/edk2-arm-vars.fd
 ISO_CHECKSUM ?= $(shell jq -r '.[] | select(.version=="$(VER)" and .arch=="$(ARCH)") | .iso_checksum' images.json)
 
 NAME  = openbsd-$(VER)-$(ARCH)-$(FLAVOR)
-OUT   = output/$(FLAVOR)
+OUT    = output/build/$(ARCH)/$(VER)/$(FLAVOR)
 IMG    = $(OUT)/$(NAME).img
-IMGZST = $(OUT)/$(NAME).img.zst
+IMGGZ  = $(OUT)/$(NAME).img.gz
 
 SOURCES = openbsd.pkr.hcl install.conf.pkrtpl cloud-init.sh $(wildcard scripts/*)
 
@@ -20,11 +20,11 @@ SOURCES = openbsd.pkr.hcl install.conf.pkrtpl cloud-init.sh $(wildcard scripts/*
 
 build: $(IMG)
 
-compress: $(IMGZST)
+compress: $(IMGGZ)
 
 smoke: $(IMG)
 	packer init test.pkr.hcl
-	packer build -force -var image=$(IMG) -var arch=$(ARCH) -var accelerator=$(ACCEL) -var efi_code=$(EFI_CODE) -var efi_vars=$(EFI_VARS) test.pkr.hcl
+	packer build -force -var image=$(IMG) -var version=$(VER) -var arch=$(ARCH) -var flavor=$(FLAVOR) -var accelerator=$(ACCEL) -var efi_code=$(EFI_CODE) -var efi_vars=$(EFI_VARS) test.pkr.hcl
 
 $(IMG): $(SOURCES) images.json
 	packer init openbsd.pkr.hcl
@@ -38,8 +38,8 @@ $(IMG): $(SOURCES) images.json
 	  -var efi_vars=$(EFI_VARS) \
 	  openbsd.pkr.hcl
 
-$(IMGZST): $(IMG)
-	zstd -T0 -19 --long=27 -f -o $@ $<
+$(IMGGZ): $(IMG)
+	pigz -9 -c $< > $@
 
 clean:
 	rm -rf output

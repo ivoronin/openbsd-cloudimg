@@ -26,6 +26,16 @@ variable "arch" {
   default = "amd64"
 }
 
+variable "version" {
+  type    = string
+  default = "7.9"
+}
+
+variable "flavor" {
+  type    = string
+  default = "base"
+}
+
 variable "efi_code" {
   type    = string
   default = ""
@@ -78,7 +88,7 @@ locals {
 # IMDS work - there is no other way into the cleaned image.
 source "qemu" "smoke" {
   vm_name          = "smoke-test"
-  output_directory = "output/smoke"
+  output_directory = "output/smoke/${var.arch}/${var.version}/${var.flavor}"
 
   disk_image       = true
   iso_url          = var.image
