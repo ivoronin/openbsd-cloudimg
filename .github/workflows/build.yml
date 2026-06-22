@@ -31,6 +31,11 @@ jobs:
     needs: setup
     runs-on: ubuntu-24.04
     name: ${{ matrix.image.version }}-${{ matrix.image.arch }}-${{ matrix.flavor }}
+    # packer init resolves plugins through the GitHub API; authenticate so the
+    # parallel matrix does not exhaust the 60/hr unauthenticated limit that is
+    # shared across all jobs on a runner's egress IP.
+    env:
+      PACKER_GITHUB_API_TOKEN: ${{ github.token }}
     strategy:
       fail-fast: false
       matrix:
