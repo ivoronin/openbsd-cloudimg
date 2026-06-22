@@ -1,11 +1,12 @@
 VER          ?= 7.9
-ARCH         ?= $(shell uname -m)
+# Build-host arch in the project's naming (uname -m says x86_64/aarch64; we use
+# amd64/arm64). Drives the ARCH default and the accelerator choice.
+HOST_ARCH    := $(patsubst aarch64,arm64,$(patsubst x86_64,amd64,$(shell uname -m)))
+ARCH         ?= $(HOST_ARCH)
 FLAVOR       ?= base
-# QEMU accelerator from the build host: native (kvm/hvf) when the target arch
-# matches the host, else tcg. Normalize x86_64<->amd64 before comparing.
-# Override ACCEL=... to force.
-norm_arch     = $(patsubst aarch64,arm64,$(patsubst x86_64,amd64,$(1)))
-ACCEL        ?= $(if $(filter $(call norm_arch,$(ARCH)),$(call norm_arch,$(shell uname -m))),$(if $(filter Darwin,$(shell uname -s)),hvf,kvm),tcg)
+# QEMU accelerator: native (kvm on Linux, hvf on macOS) when the target arch
+# matches the build host, else tcg. Override ACCEL=... to force.
+ACCEL        ?= $(if $(filter $(ARCH),$(HOST_ARCH)),$(if $(filter Darwin,$(shell uname -s)),hvf,kvm),tcg)
 CLOUD_INIT_SOURCE  ?=
 # Optional debug flags - set to 1 to drop a provisioning step from the build.
 DISABLE_SYSPATCH   ?=
