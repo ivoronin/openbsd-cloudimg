@@ -114,7 +114,7 @@ source "qemu" "smoke" {
   # cidata: Packer builds a CIDATA-labeled ISO9660 from this content and attaches
   # it; the ephemeral key is the sshkey data source Packer already holds. The
   # meta-data is exactly the block-YAML shape cloud-init's parser expects.
-  cd_label = var.cloud_init_source == "cidata" ? "cidata" : null
+  cd_label = var.cloud_init_source == "cidata" ? "CIDATA" : null
   cd_content = var.cloud_init_source == "cidata" ? {
     "meta-data" = "local-hostname: smoke-test\npublic-keys:\n  - ${data.sshkey.test.public_key}\n"
   } : null
