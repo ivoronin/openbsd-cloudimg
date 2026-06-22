@@ -14,14 +14,14 @@ my ($uid, $gid, $home) = (getpwnam 'openbsd')[2, 3, 7];
 sub hostname_ok { defined $_[0] && length $_[0] && $_[0] !~ /[^A-Za-z0-9.-]/ }
 
 # ---- data sources ------------------------------------------------------
-# Each returns { keys => \@keys, hostname => $h } if its medium yielded
-# something usable, else undef so selection falls through to the next.
+# Each returns { source => $name, keys => \@keys, hostname => $h } if its
+# medium yielded something usable, else undef so selection falls through.
 
-# Pack a source's findings into that contract, or undef if it found nothing
-# usable (no keys and no valid hostname).
+# Pack a source's findings (tagged with its name) into that contract, or undef
+# if it found nothing usable (no keys and no valid hostname).
 sub config {
-    my ($keys, $host) = @_;
-    return @$keys || hostname_ok($host) ? { keys => $keys, hostname => $host } : undef;
+    my ($source, $keys, $host) = @_;
+    return @$keys || hostname_ok($host) ? { source => $source, keys => $keys, hostname => $host } : undef;
 }
 
 # The disk whose ISO9660 volume label is exactly CIDATA, else undef. Reads the
@@ -57,7 +57,7 @@ sub nocloud {
     # obvious breakage so a malformed file can't write junk to authorized_keys.
     my $pk = $doc->{'public-keys'};
     my @keys = grep { defined && !ref && /\S/ } (ref $pk eq 'ARRAY' ? @$pk : ());
-    return config(\@keys, $doc->{'local-hostname'});
+    return config('nocloud', \@keys, $doc->{'local-hostname'});
 }
 
 # timeout 15: give up if the IMDS does not answer within 15s, so an
@@ -72,7 +72,7 @@ sub imds_get {
 sub imds {
     my @keys = imds_get('meta-data/public-keys/0/openssh-key');
     my ($host) = imds_get('meta-data/local-hostname');
-    return config(\@keys, $host);
+    return config('imds', \@keys, $host);
 }
 
 # ---- apply -------------------------------------------------------------
@@ -113,6 +113,7 @@ sub apply_hostname {
 # NoCloud (disk) wins if present; otherwise IMDS. NoCloud-first means a local
 # VM with no IMDS does not sit through the HTTP timeout.
 my $cfg = nocloud() // imds() // {};
+print "cloud-init: ", ($cfg->{source} // 'no data source'), "\n";
 
 apply_keys(@{ $cfg->{keys} })    if $cfg->{keys} && @{ $cfg->{keys} };
 apply_hostname($cfg->{hostname}) if hostname_ok($cfg->{hostname});
