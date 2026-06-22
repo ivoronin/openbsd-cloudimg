@@ -51,6 +51,24 @@ variable "efi_vars" {
   default     = ""
 }
 
+variable "disable_syspatch" {
+  type        = bool
+  description = "Skip the syspatch provisioning step (debug builds)"
+  default     = false
+}
+
+variable "disable_cloud_init" {
+  type        = bool
+  description = "Skip cloud-init setup - its file upload and cloud.sh (debug builds)"
+  default     = false
+}
+
+variable "disable_cleanup" {
+  type        = bool
+  description = "Skip the cleanup provisioning step (debug builds)"
+  default     = false
+}
+
 data "sshkey" "install" {
   type = "ed25519"
 }
@@ -58,6 +76,12 @@ data "sshkey" "install" {
 locals {
   tag        = replace(var.version, ".", "")
   image_name = "openbsd-${var.version}-${var.arch}-${var.flavor}"
+  # Provisioning stack built from the DISABLE_* flags; compact() drops disabled entries.
+  provision_scripts = compact([
+    var.disable_syspatch ? "" : "scripts/syspatch.sh",
+    var.disable_cloud_init ? "" : "scripts/cloud.sh",
+    var.disable_cleanup ? "" : "scripts/cleanup.sh",
+  ])
   sets = {
     base = "-man* -game* -x* -comp*"
     full = "*"
@@ -145,15 +169,16 @@ source "qemu" "install" {
 build {
   sources = ["source.qemu.install"]
 
+  # only/except are evaluated in the var/local eval context (Packer decodes them
+  # with gohcl against ectx), so except-ing the sole source conditionally skips a
+  # whole provisioner - Packer's only lever to drop one.
   provisioner "file" {
     source      = "cloud-init.sh"
     destination = "/usr/local/sbin/cloud-init"
+    except      = var.disable_cloud_init ? ["qemu.install"] : []
   }
   provisioner "shell" {
-    scripts = [
-      "scripts/syspatch.sh",
-      "scripts/cloud.sh",
-      "scripts/cleanup.sh",
-    ]
+    scripts = local.provision_scripts
+    except  = length(local.provision_scripts) == 0 ? ["qemu.install"] : []
   }
 }

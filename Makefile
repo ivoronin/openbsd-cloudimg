@@ -2,6 +2,10 @@ VER          ?= 7.9
 ARCH         ?= amd64
 FLAVOR       ?= base
 ACCEL        ?= kvm
+# Optional debug flags - set to 1 to drop a provisioning step from the build.
+DISABLE_SYSPATCH   ?=
+DISABLE_CLOUD_INIT ?=
+DISABLE_CLEANUP    ?=
 # arm64 UEFI firmware (qemu does not autoload it for virt). CODE is read-only,
 # VARS a writable template. Auto-located across common qemu dirs; override else.
 EFI_CODE     ?= $(firstword $(wildcard /opt/homebrew/share/qemu/edk2-aarch64-code.fd /usr/share/qemu/edk2-aarch64-code.fd /usr/share/AAVMF/AAVMF_CODE.fd))
@@ -36,6 +40,9 @@ $(IMG): $(SOURCES) images.json
 	  -var iso_checksum=$(ISO_CHECKSUM) \
 	  -var efi_code=$(EFI_CODE) \
 	  -var efi_vars=$(EFI_VARS) \
+	  -var disable_syspatch=$(if $(DISABLE_SYSPATCH),true,false) \
+	  -var disable_cloud_init=$(if $(DISABLE_CLOUD_INIT),true,false) \
+	  -var disable_cleanup=$(if $(DISABLE_CLEANUP),true,false) \
 	  build.pkr.hcl
 
 $(IMGGZ): $(IMG)
