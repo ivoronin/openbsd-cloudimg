@@ -1,16 +1,35 @@
 #!/bin/ksh
 
-METADATA_BASE_URL="http://169.254.169.254/latest"
-SSH_KEY_USER=openbsd
+# Configure the machine (ssh key + hostname) from the first available data
+# source. Sources are tried in priority order; the first present one wins.
 
+IMDS_BASE_URL="http://169.254.169.254/latest"
+SSH_KEY_USER=openbsd
 SSH_KEY_USER_GID="$(getent passwd ${SSH_KEY_USER} | cut -d: -f4)"
 SSH_KEY_USER_HOME="$(getent passwd ${SSH_KEY_USER} | cut -d: -f6)"
+SSH_AUTHORIZED_KEYS="${SSH_KEY_USER_HOME}/.ssh/authorized_keys"
+
+# Normalized config, populated by the selected data source.
+SSH_KEY=
+LOCAL_HOSTNAME=
+
+# ---- data sources ------------------------------------------------------
+# Each datasource_* populates SSH_KEY / LOCAL_HOSTNAME and returns 0 if its
+# medium is present (it is the active source), non-zero otherwise.
 
 # -w 15: give up if the IMDS does not connect within 15s, so an unavailable
-# metadata endpoint cannot wedge boot - callers skip the step on failure.
-get_data() {
-   ftp -w 15 -Vo - "${METADATA_BASE_URL}/$1"
+# metadata endpoint cannot wedge boot.
+imds_get() {
+	ftp -w 15 -Vo - "${IMDS_BASE_URL}/$1"
 }
+
+datasource_imds() {
+	SSH_KEY="$(imds_get meta-data/public-keys/0/openssh-key)"
+	LOCAL_HOSTNAME="$(imds_get meta-data/local-hostname)"
+	[ -n "${SSH_KEY}" ] || [ -n "${LOCAL_HOSTNAME}" ]
+}
+
+# ---- apply (source-agnostic) -------------------------------------------
 
 setup_ssh_keys() {
 	# shellcheck disable=SC2174
@@ -40,16 +59,14 @@ setup_local_hostname() {
 		-e "s/^::1[[:space:]].*/::1 ${LOCAL_NAMES}/" /etc/hosts
 }
 
-if SSH_KEY="$(get_data meta-data/public-keys/0/openssh-key)" && [ -n "${SSH_KEY}" ]; then
-	SSH_AUTHORIZED_KEYS="${SSH_KEY_USER_HOME}/.ssh/authorized_keys"
+# ---- main: first present source wins, then apply -----------------------
 
-	if ! grep -q "^${SSH_KEY}$" "${SSH_AUTHORIZED_KEYS}" 2> /dev/null; then
-		setup_ssh_keys
-	fi
+datasource_imds
+
+if [ -n "${SSH_KEY}" ] && ! grep -q "^${SSH_KEY}$" "${SSH_AUTHORIZED_KEYS}" 2> /dev/null; then
+	setup_ssh_keys
 fi
 
-if LOCAL_HOSTNAME="$(get_data meta-data/local-hostname)" && [ -n "${LOCAL_HOSTNAME}" ]; then
-	if ! grep -q "^${LOCAL_HOSTNAME}$" /etc/myname; then
-		setup_local_hostname
-	fi
+if [ -n "${LOCAL_HOSTNAME}" ] && ! grep -q "^${LOCAL_HOSTNAME}$" /etc/myname; then
+	setup_local_hostname
 fi
