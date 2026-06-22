@@ -56,7 +56,7 @@ Targets:
 
 - `make build` - build one image (default)
 - `make smoke` - boot the image and check cloud-init injected the key and hostname, for both sources (or one, via `CLOUD_INIT_SOURCE`)
-- `make compress` - gzip the image to `.img.gz`
+- `make compress` - xz-compress the image to `.img.xz`
 - `make clean` - remove `output/`
 
 Variables:
@@ -79,11 +79,11 @@ Variables:
 CI builds the full matrix (release × arch × flavor), smoke-tests both metadata sources, and publishes attested images to [Releases](https://github.com/ivoronin/openbsd-cloudimg/releases). Inputs are pinned for reproducibility: installer ISO checksums, the Packer version, and SHA-pinned actions.
 
 ```bash
-gh release download -R ivoronin/openbsd-cloudimg -p 'openbsd-7.9-amd64-base-*.img.gz'
-gh attestation verify openbsd-7.9-amd64-base-*.img.gz --repo ivoronin/openbsd-cloudimg
+gh release download -R ivoronin/openbsd-cloudimg -p 'openbsd-7.9-amd64-base-*.img.xz'
+gh attestation verify openbsd-7.9-amd64-base-*.img.xz --repo ivoronin/openbsd-cloudimg
 ```
 
-Assets are named `openbsd-<ver>-<arch>-<flavor>-<gitref>-<timestamp>.img.gz`.
+Assets are named `openbsd-<ver>-<arch>-<flavor>-<gitref>-<timestamp>.img.xz`.
 
 ## Running locally
 
@@ -102,7 +102,7 @@ public-keys:
 EOF
 xorriso -as mkisofs -V CIDATA -J -r -o cidata.iso meta-data
 
-# raw .img from make build, or gunzip a release first
+# raw .img from make build, or unxz a release first
 qemu-system-x86_64 -accel kvm -m 1G -nographic \
   -drive file=openbsd-7.9-amd64-base.img,format=raw,if=virtio \
   -nic user,model=virtio,hostfwd=tcp::2222-:22 \
@@ -158,7 +158,7 @@ The key goes into `~openbsd/.ssh/authorized_keys` in a managed block, rewritten 
 ## Requirements
 
 - Build on Linux (KVM) or macOS (hvf), or anywhere QEMU runs with `ACCEL=tcg`. Native acceleration needs the host architecture to match the target.
-- Packer 1.15.4+, QEMU, `jq` (reads `images.json`), `pigz` (`make compress`).
+- Packer 1.15.4+, QEMU, `jq` (reads `images.json`), `xz` (`make compress`).
 - arm64 builds: edk2 aarch64 UEFI firmware (`qemu-efi-aarch64` on Debian/Ubuntu, bundled with QEMU on macOS), auto-located.
 - `make smoke`: `xorriso` (Packer builds the CIDATA test ISO with it; `hdiutil` on macOS) and `netcat-openbsd`.
 

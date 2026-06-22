@@ -57,7 +57,7 @@ jobs:
       - name: Install QEMU and Packer
         run: |
           sudo apt-get update
-          sudo apt-get install -y qemu-system-x86 qemu-system-arm qemu-efi-aarch64 qemu-utils pigz netcat-openbsd xorriso
+          sudo apt-get install -y qemu-system-x86 qemu-system-arm qemu-efi-aarch64 qemu-utils xz-utils netcat-openbsd xorriso
           wget -q "https://releases.hashicorp.com/packer/${PACKER_VERSION}/packer_${PACKER_VERSION}_linux_amd64.zip"
           sudo unzip -o "packer_${PACKER_VERSION}_linux_amd64.zip" -d /usr/local/bin
           packer version
@@ -98,7 +98,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: openbsd-${{ matrix.image.version }}-${{ matrix.image.arch }}-${{ matrix.flavor }}
-          path: output/build/${{ matrix.image.arch }}/${{ matrix.image.version }}/${{ matrix.flavor }}/*.img.gz
+          path: output/build/${{ matrix.image.arch }}/${{ matrix.image.version }}/${{ matrix.flavor }}/*.img.xz
           if-no-files-found: error
 
   release:
@@ -123,18 +123,18 @@ jobs:
       - name: Stamp assets
         run: |
           cd dist
-          for f in *.img.gz; do
-            mv "$f" "${f%.img.gz}-${GITREF}-${TS}.img.gz"
+          for f in *.img.xz; do
+            mv "$f" "${f%.img.xz}-${GITREF}-${TS}.img.xz"
           done
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
-          subject-path: dist/*.img.gz
+          subject-path: dist/*.img.xz
 
       - name: Publish release
         run: |
-          gh release create "$TS" dist/*.img.gz \
+          gh release create "$TS" dist/*.img.xz \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "OpenBSD images $TS" \

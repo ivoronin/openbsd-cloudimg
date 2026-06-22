@@ -21,7 +21,7 @@ ISO_CHECKSUM ?= $(shell jq -r '.[] | select(.version=="$(VER)" and .arch=="$(ARC
 NAME  = openbsd-$(VER)-$(ARCH)-$(FLAVOR)
 OUT    = output/build/$(ARCH)/$(VER)/$(FLAVOR)
 IMG    = $(OUT)/$(NAME).img
-IMGGZ  = $(OUT)/$(NAME).img.gz
+IMGXZ  = $(OUT)/$(NAME).img.xz
 
 SOURCES = build.pkr.hcl install.conf.pkrtpl cloud-init.pl $(wildcard scripts/*)
 
@@ -30,7 +30,7 @@ SOURCES = build.pkr.hcl install.conf.pkrtpl cloud-init.pl $(wildcard scripts/*)
 
 build: $(IMG)
 
-compress: $(IMGGZ)
+compress: $(IMGXZ)
 
 SMOKE_SOURCES = $(if $(CLOUD_INIT_SOURCE),$(CLOUD_INIT_SOURCE),imds cidata)
 
@@ -56,8 +56,8 @@ $(IMG): $(SOURCES) images.json
 	  -var disable_cleanup=$(if $(DISABLE_CLEANUP),true,false) \
 	  build.pkr.hcl
 
-$(IMGGZ): $(IMG)
-	pigz -9 -c $< > $@
+$(IMGXZ): $(IMG)
+	xz -T0 -c $< > $@
 
 clean:
 	rm -rf output
