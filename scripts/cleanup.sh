@@ -26,3 +26,11 @@ done
 [ -f "/var/mail/root" ] && : > "/var/mail/root"
 
 rm -rf /tmp/* /var/tmp/*
+
+echo "Zeroing free space:"
+mount -t ffs | while read -r _dev _on mnt _rest; do
+	echo "  $mnt"
+	dd if=/dev/zero of="$mnt/.zerofill" bs=1m 2>/dev/null
+	rm -f "$mnt/.zerofill"
+done
+sync
