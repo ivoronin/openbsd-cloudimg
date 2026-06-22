@@ -11,9 +11,6 @@ permissions:
 
 env:
   PACKER_VERSION: 1.15.4
-  # Frozen Ubuntu archive snapshot (snapshot.ubuntu.com) that pins apt package
-  # versions for reproducible builds. Bump deliberately to take package updates.
-  APT_SNAPSHOT: "20250601T000000Z"
 
 jobs:
   setup:
@@ -54,11 +51,6 @@ jobs:
 
       - name: Install QEMU and Packer
         run: |
-          # Pin apt to the Ubuntu archive snapshot for reproducible package
-          # versions. The runner's mirror does not serve snapshots (only
-          # snapshot.ubuntu.com does), so point apt there and drop the defaults.
-          sudo rm -f /etc/apt/sources.list /etc/apt/sources.list.d/*
-          printf 'Types: deb\nURIs: https://snapshot.ubuntu.com/ubuntu/%s\nSuites: noble noble-updates noble-security\nComponents: main restricted universe multiverse\nSigned-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n' "$APT_SNAPSHOT" | sudo tee /etc/apt/sources.list.d/snapshot.sources >/dev/null
           sudo apt-get update
           sudo apt-get install -y qemu-system-x86 qemu-system-arm qemu-efi-aarch64 qemu-utils pigz netcat-openbsd xorriso
           wget -q "https://releases.hashicorp.com/packer/${PACKER_VERSION}/packer_${PACKER_VERSION}_linux_amd64.zip"

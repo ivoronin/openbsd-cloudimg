@@ -22,9 +22,9 @@ Packer drives the OpenBSD installer in QEMU through autoinstall(8), unattended, 
 
 ## Sterility
 
-Nothing static ships. Install authenticates with a per-build ephemeral ed25519 key and `prohibit-password` root, so there is no password or stored key to leak. Before sealing, cleanup wipes:
+Nothing static ships. Packer logs into the installer over SSH with a throwaway ed25519 keypair generated on the build host; the private half never enters the image, and root login stays `prohibit-password`. Before sealing, cleanup wipes the public half it installed, along with the rest of the machine's identity:
 
-- `/root/.ssh/authorized_keys`
+- `/root/.ssh/authorized_keys` (the install key's public half)
 - `/etc/ssh/ssh_host_*` (sshd regenerates these on first boot)
 - isakmpd and iked private keys
 - `/etc/soii.key`, the SLAAC IPv6 address secret
@@ -76,7 +76,7 @@ Variables:
 
 ## Releases
 
-CI builds the full matrix (release × arch × flavor), smoke-tests both metadata sources, and publishes attested images to [Releases](https://github.com/ivoronin/openbsd-cloudimg/releases). Inputs are pinned for reproducibility: installer ISO checksums, the Packer version, a frozen apt snapshot, and SHA-pinned actions.
+CI builds the full matrix (release × arch × flavor), smoke-tests both metadata sources, and publishes attested images to [Releases](https://github.com/ivoronin/openbsd-cloudimg/releases). Inputs are pinned for reproducibility: installer ISO checksums, the Packer version, and SHA-pinned actions.
 
 ```bash
 gh release download -R ivoronin/openbsd-cloudimg -p 'openbsd-7.9-amd64-base-*.img.gz'
