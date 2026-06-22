@@ -156,7 +156,9 @@ source "qemu" "install" {
     "A<enter><wait>",
     "http://{{ .HTTPIP }}:{{ .HTTPPort }}/install.conf<enter>"
   ]
-  boot_wait        = "30s"
+  # tcg emulation reaches the loader prompt far slower than native kvm/hvf, so
+  # double the wait before boot_command starts typing.
+  boot_wait        = var.accelerator == "tcg" ? "60s" : "30s"
   shutdown_command = "halt -p"
 
   ssh_private_key_file = data.sshkey.install.private_key_path
