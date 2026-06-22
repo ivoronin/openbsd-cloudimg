@@ -50,7 +50,7 @@ One `make build` produces one image:
 make build VER=7.9 ARCH=amd64 FLAVOR=base
 ```
 
-Output lands at `output/build/<arch>/<version>/<flavor>/openbsd-<ver>-<arch>-<flavor>.img`. Without KVM pass `ACCEL=tcg`, or `ACCEL=hvf` on macOS. Add a release by putting its `installNN.iso` SHA256 in `images.json`.
+Output lands at `output/build/<arch>/<version>/<flavor>/openbsd-<ver>-<arch>-<flavor>.img`. `ARCH` and `ACCEL` default to the build host: native acceleration when the target arch matches, `tcg` when it differs. Override either as needed. Add a release by putting its `installNN.iso` SHA256 in `images.json`.
 
 Targets:
 
@@ -64,9 +64,9 @@ Variables:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `VER` | OpenBSD release | `7.9` |
-| `ARCH` | `amd64` or `arm64` | `amd64` |
+| `ARCH` | `amd64` or `arm64` | (host arch) |
 | `FLAVOR` | `base` (minimal) or `full` (all sets) | `base` |
-| `ACCEL` | QEMU accelerator: `kvm`, `tcg`, `hvf` or `none` | `kvm` |
+| `ACCEL` | QEMU accelerator; native (`kvm`/`hvf`) when the target arch matches the host, else `tcg` | (auto) |
 | `ISO_CHECKSUM` | Installer ISO SHA256; read from `images.json` when unset | (from `images.json`) |
 | `CLOUD_INIT_SOURCE` | `make smoke` only: limit to `imds` or `cidata` | (both) |
 | `EFI_CODE` / `EFI_VARS` | arm64 UEFI firmware paths; auto-located | (auto) |
