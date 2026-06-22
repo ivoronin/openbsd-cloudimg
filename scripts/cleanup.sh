@@ -27,6 +27,14 @@ done
 
 rm -rf /tmp/* /var/tmp/*
 
+# Network: drop the installer's build-NIC config and lay down a generic cloud
+# set, so netstart brings up whichever NIC the target presents and silently
+# skips the absent ones (ifcreate no-ops them). "inet autoconf" = DHCP.
+rm -f /etc/hostname.*
+for _if in vio0 ena0 xnf0 hvn0 vmx0; do
+	echo 'inet autoconf' > /etc/hostname.$_if
+done
+
 echo "Zeroing free space:"
 mount -t ffs | while read -r _dev _on mnt _rest; do
 	echo "  $mnt"
