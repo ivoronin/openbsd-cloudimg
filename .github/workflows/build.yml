@@ -60,7 +60,7 @@ jobs:
           sudo rm -f /etc/apt/sources.list /etc/apt/sources.list.d/*
           printf 'Types: deb\nURIs: https://snapshot.ubuntu.com/ubuntu/%s\nSuites: noble noble-updates noble-security\nComponents: main restricted universe multiverse\nSigned-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n' "$APT_SNAPSHOT" | sudo tee /etc/apt/sources.list.d/snapshot.sources >/dev/null
           sudo apt-get update
-          sudo apt-get install -y qemu-system-x86 qemu-utils pigz netcat-openbsd xorriso
+          sudo apt-get install -y qemu-system-x86 qemu-system-arm qemu-efi-aarch64 qemu-utils pigz netcat-openbsd xorriso
           wget -q "https://releases.hashicorp.com/packer/${PACKER_VERSION}/packer_${PACKER_VERSION}_linux_amd64.zip"
           sudo unzip -o "packer_${PACKER_VERSION}_linux_amd64.zip" -d /usr/local/bin
           packer version
@@ -73,11 +73,12 @@ jobs:
 
       - name: Build image
         run: |
+          # No ACCEL: the Makefile picks kvm for the native amd64 build and tcg
+          # for the cross-arch (emulated) arm64 build.
           make build \
             VER="${{ matrix.image.version }}" \
             ARCH="${{ matrix.image.arch }}" \
             FLAVOR="${{ matrix.flavor }}" \
-            ACCEL=kvm \
             ISO_CHECKSUM="${{ matrix.image.iso_checksum }}"
 
       - name: Smoke test image
@@ -85,8 +86,7 @@ jobs:
           make smoke \
             VER="${{ matrix.image.version }}" \
             ARCH="${{ matrix.image.arch }}" \
-            FLAVOR="${{ matrix.flavor }}" \
-            ACCEL=kvm
+            FLAVOR="${{ matrix.flavor }}"
 
       - name: Compress image
         if: ${{ success() && github.event_name == 'workflow_dispatch' }}
