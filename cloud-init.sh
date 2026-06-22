@@ -6,8 +6,10 @@ SSH_KEY_USER=openbsd
 SSH_KEY_USER_GID="$(getent passwd ${SSH_KEY_USER} | cut -d: -f4)"
 SSH_KEY_USER_HOME="$(getent passwd ${SSH_KEY_USER} | cut -d: -f6)"
 
+# -w 15: give up if the IMDS does not connect within 15s, so an unavailable
+# metadata endpoint cannot wedge boot - callers skip the step on failure.
 get_data() {
-   ftp -Vo - "${METADATA_BASE_URL}/$1"
+   ftp -w 15 -Vo - "${METADATA_BASE_URL}/$1"
 }
 
 setup_ssh_keys() {
