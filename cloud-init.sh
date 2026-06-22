@@ -89,8 +89,8 @@ setup_ssh_keys() {
 	fi
 
 	mv "${SSH_AUTHORIZED_KEYS}" "${SSH_AUTHORIZED_KEYS}.bak"
-	awk '/^# cloud-init/{c=2} !(c&&c--)' > "${SSH_AUTHORIZED_KEYS}" < "${SSH_AUTHORIZED_KEYS}.bak"
-	printf '# cloud-init\n%s\n' "${SSH_KEY}" >> "${SSH_AUTHORIZED_KEYS}"
+	awk '/^# cloud-init$/,/^# cloud-init end$/{next} 1' > "${SSH_AUTHORIZED_KEYS}" < "${SSH_AUTHORIZED_KEYS}.bak"
+	printf '# cloud-init\n%s\n# cloud-init end\n' "${SSH_KEY}" >> "${SSH_AUTHORIZED_KEYS}"
 	rm "${SSH_AUTHORIZED_KEYS}.bak"
 }
 
