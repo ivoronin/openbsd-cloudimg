@@ -1,8 +1,11 @@
 VER          ?= 7.9
 ARCH         ?= $(shell uname -m)
 FLAVOR       ?= base
-# QEMU accelerator: kvm on Linux, hvf on macOS; override (e.g. tcg) for cross-arch builds.
-ACCEL        ?= $(if $(filter Darwin,$(shell uname -s)),hvf,kvm)
+# QEMU accelerator from the build host: native (kvm/hvf) when the target arch
+# matches the host, else tcg. Normalize x86_64<->amd64 before comparing.
+# Override ACCEL=... to force.
+norm_arch     = $(patsubst aarch64,arm64,$(patsubst x86_64,amd64,$(1)))
+ACCEL        ?= $(if $(filter $(call norm_arch,$(ARCH)),$(call norm_arch,$(shell uname -m))),$(if $(filter Darwin,$(shell uname -s)),hvf,kvm),tcg)
 CLOUD_INIT_SOURCE  ?=
 # Optional debug flags - set to 1 to drop a provisioning step from the build.
 DISABLE_SYSPATCH   ?=
