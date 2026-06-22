@@ -100,13 +100,13 @@ local-hostname: obsd1
 public-keys:
   - $(cat id_openbsd.pub)
 EOF
-xorriso -as mkisofs -V CIDATA -J -r -o seed.iso meta-data
+xorriso -as mkisofs -V CIDATA -J -r -o cidata.iso meta-data
 
 # raw .img from make build, or gunzip a release first
 qemu-system-x86_64 -accel kvm -m 1G -nographic \
   -drive file=openbsd-7.9-amd64-base.img,format=raw,if=virtio \
   -nic user,model=virtio,hostfwd=tcp::2222-:22 \
-  -cdrom seed.iso
+  -cdrom cidata.iso
 
 ssh -i id_openbsd -p 2222 openbsd@localhost
 ```
@@ -116,19 +116,20 @@ ssh -i id_openbsd -p 2222 openbsd@localhost
 ```bash
 ssh-keygen -t ed25519 -f ./id_openbsd -N ''
 
-# CIDATA seed carrying your public key (mkisofs: doas pkg_add cdrtools)
+# CIDATA seed carrying your public key (mkhybrid is in base; -r adds the Rock
+# Ridge names cloud-init reads, without it meta-data is mangled to META_DAT)
 cat > meta-data <<EOF
 local-hostname: obsd1
 public-keys:
   - $(cat id_openbsd.pub)
 EOF
-mkisofs -V CIDATA -J -r -o seed.iso meta-data
+mkhybrid -o cidata.iso -r -V CIDATA meta-data
 
 # first disk is the image, second the seed; -L gives the VM a local IP
 doas rcctl start vmd
 doas vmctl start obsd1 -m 1G -L \
   -d openbsd-7.9-amd64-base.img \
-  -d seed.iso
+  -d cidata.iso
 
 # watch boot if you like: doas vmctl console obsd1
 ssh -i id_openbsd openbsd@100.64.0.3
