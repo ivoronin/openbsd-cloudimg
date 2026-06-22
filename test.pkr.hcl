@@ -21,8 +21,53 @@ variable "accelerator" {
   default = "kvm"
 }
 
+variable "arch" {
+  type    = string
+  default = "amd64"
+}
+
+variable "efi_code" {
+  type    = string
+  default = ""
+}
+
+variable "efi_vars" {
+  type    = string
+  default = ""
+}
+
 data "sshkey" "test" {
   type = "ed25519"
+}
+
+locals {
+  qemu_binary = {
+    amd64 = "qemu-system-x86_64"
+    arm64 = "qemu-system-aarch64"
+  }
+  machine_type = {
+    amd64 = "pc"
+    arm64 = "virt"
+  }
+  # Fakes an EC2 IMDS at 169.254.169.254 for the image's cloud-init. Three SLIRP
+  # constraints: (1) a guestfwd guest address must be inside the guest network,
+  # hence the link-local 169.254.0.0/16; (2) the forward target is a host-side
+  # connect, so it points at Packer's HTTP server on 127.0.0.1, not {{ .HTTPIP }}
+  # (the guest gateway, unreachable from the host); (3) it uses "-cmd:nc" not
+  # "-tcp:" because SLIRP does not forward a write-callback guestfwd's host close
+  # to the guest, which hangs OpenBSD ftp; nc relays the close. hostfwd reaches
+  # sshd regardless of the guest's address.
+  net_qemuargs = [
+    ["-netdev", "user,id=n0,net=169.254.0.0/16,host=169.254.0.2,dhcpstart=169.254.0.15,hostfwd=tcp::{{ .SSHHostPort }}-:22,guestfwd=tcp:169.254.169.254:80-cmd:nc 127.0.0.1 {{ .HTTPPort }}"],
+    ["-device", "virtio-net,netdev=n0"],
+  ]
+  # arm64 "virt" has no default display or PS/2 keyboard; add a virtio-gpu frame-
+  # buffer and a USB keyboard so Packer's VNC connection works and a human can
+  # watch/type at the console while debugging. amd64 needs neither.
+  arch_qemuargs = {
+    amd64 = []
+    arm64 = [["-cpu", "host"], ["-device", "virtio-gpu-pci"], ["-device", "qemu-xhci"], ["-device", "usb-kbd"]]
+  }
 }
 
 # Boot the built image on a disposable clone (the source .img is never written)
@@ -42,30 +87,27 @@ source "qemu" "smoke" {
   disk_interface   = "virtio"
   format           = "raw"
 
-  accelerator = var.accelerator
-  headless    = true
+  qemu_binary       = local.qemu_binary[var.arch]
+  machine_type      = local.machine_type[var.arch]
+  efi_firmware_code = var.arch == "arm64" ? var.efi_code : ""
+  efi_firmware_vars = var.arch == "arm64" ? var.efi_vars : ""
+  accelerator       = var.accelerator
+  headless          = true
 
   http_content = {
     "/latest/meta-data/public-keys/0/openssh-key" = data.sshkey.test.public_key
     "/latest/meta-data/local-hostname"            = "smoke-test"
   }
 
-  # Two SLIRP quirks: (1) a guestfwd's guest address must sit inside the guest
-  # network, so move the network into link-local 169.254.0.0/16 to host the
-  # fixed IMDS address 169.254.169.254; (2) the guestfwd target is a host-side
-  # connect, so it must point at Packer's HTTP server on the host loopback,
-  # NOT {{ .HTTPIP }} - that resolves to the guest-facing gateway 10.0.2.2,
-  # which the host cannot connect to (qemu then exits at boot). hostfwd reaches
-  # sshd regardless of the guest's address.
-  qemuargs = [
-    ["-netdev", "user,id=n0,net=169.254.0.0/16,host=169.254.0.2,dhcpstart=169.254.0.15,hostfwd=tcp::{{ .SSHHostPort }}-:22,guestfwd=tcp:169.254.169.254:80-tcp:127.0.0.1:{{ .HTTPPort }}"],
-    ["-device", "virtio-net,netdev=n0"],
-  ]
+  qemuargs = concat(local.arch_qemuargs[var.arch], local.net_qemuargs)
 
   ssh_username         = "openbsd"
   ssh_private_key_file = data.sshkey.test.private_key_path
   ssh_timeout          = "10m"
   shutdown_command     = "doas halt -p"
+
+  vnc_port_min = 5900
+  vnc_port_max = 5900
 }
 
 build {

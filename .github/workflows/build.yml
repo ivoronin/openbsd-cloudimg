@@ -11,10 +11,13 @@ permissions:
 
 env:
   PACKER_VERSION: 1.15.4
+  # Frozen Ubuntu archive snapshot (snapshot.ubuntu.com) that pins apt package
+  # versions for reproducible builds. Bump deliberately to take package updates.
+  APT_SNAPSHOT: "20250601T000000Z"
 
 jobs:
   setup:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       images: ${{ steps.gen.outputs.images }}
       timestamp: ${{ steps.gen.outputs.timestamp }}
@@ -29,7 +32,7 @@ jobs:
 
   build:
     needs: setup
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     name: ${{ matrix.image.version }}-${{ matrix.image.arch }}-${{ matrix.flavor }}
     strategy:
       fail-fast: false
@@ -39,6 +42,9 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
+      # GHA runners expose /dev/kvm but gate it behind the kvm group, which the
+      # runner user is not a member of. This udev rule opens the device so qemu
+      # can use -accel kvm without sudo. Standard recipe (actions/runner-images#8542).
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
@@ -48,8 +54,13 @@ jobs:
 
       - name: Install QEMU and Packer
         run: |
+          # Pin apt to the Ubuntu archive snapshot for reproducible package
+          # versions. The runner's mirror does not serve snapshots (only
+          # snapshot.ubuntu.com does), so point apt there and drop the defaults.
+          sudo rm -f /etc/apt/sources.list /etc/apt/sources.list.d/*
+          printf 'Types: deb\nURIs: https://snapshot.ubuntu.com/ubuntu/%s\nSuites: noble noble-updates noble-security\nComponents: main restricted universe multiverse\nSigned-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n' "$APT_SNAPSHOT" | sudo tee /etc/apt/sources.list.d/snapshot.sources >/dev/null
           sudo apt-get update
-          sudo apt-get install -y qemu-system-x86 qemu-utils zstd
+          sudo apt-get install -y qemu-system-x86 qemu-utils zstd netcat-openbsd
           wget -q "https://releases.hashicorp.com/packer/${PACKER_VERSION}/packer_${PACKER_VERSION}_linux_amd64.zip"
           sudo unzip -o "packer_${PACKER_VERSION}_linux_amd64.zip" -d /usr/local/bin
           packer version
@@ -98,7 +109,7 @@ jobs:
   release:
     needs: [setup, build]
     if: ${{ github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
       id-token: write

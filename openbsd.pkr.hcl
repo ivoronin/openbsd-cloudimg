@@ -39,6 +39,18 @@ variable "accelerator" {
   default     = "kvm"
 }
 
+variable "efi_code" {
+  type        = string
+  description = "UEFI firmware CODE (arm64 only, e.g. edk2-aarch64-code.fd)"
+  default     = ""
+}
+
+variable "efi_vars" {
+  type        = string
+  description = "UEFI firmware VARS template (arm64 only, e.g. edk2-arm-vars.fd)"
+  default     = ""
+}
+
 data "sshkey" "install" {
   type = "ed25519"
 }
@@ -53,6 +65,35 @@ locals {
   disk_size = {
     base = "10G"
     full = "40G"
+  }
+  qemu_binary = {
+    amd64 = "qemu-system-x86_64"
+    arm64 = "qemu-system-aarch64"
+  }
+  machine_type = {
+    amd64 = "pc"
+    arm64 = "virt"
+  }
+  # arm64 on "virt" needs: the host CPU model; a framebuffer (virtio-gpu) plus a
+  # USB keyboard (virt has no PS/2) so the boot_command types over VNC; and EFI
+  # mode (efi_firmware_*), which makes Packer skip the x86-only "-boot" that virt
+  # rejects.
+  qemuargs = {
+    amd64 = []
+    arm64 = [
+      ["-cpu", "host"],
+      ["-device", "virtio-gpu-pci"],
+      ["-device", "qemu-xhci"], ["-device", "usb-kbd"],
+      # disk_interface and cdrom_interface=virtio-scsi make Packer build BOTH the
+      # target disk (drive id drive0, OpenBSD sd0) and the install ISO (cdrom0, cd0)
+      # as -drive entries we never touch - so no path is hardcoded. We override only
+      # -device: one shared controller wiring the disk at bootindex=0 and the CD at
+      # bootindex=1, so the first boot falls through the empty disk to the CD
+      # installer and the installed disk boots first on the post-install reboot.
+      ["-device", "virtio-scsi-pci,id=scsi0"],
+      ["-device", "scsi-hd,bus=scsi0.0,drive=drive0,bootindex=0"],
+      ["-device", "scsi-cd,bus=scsi0.0,drive=cdrom0,bootindex=1"],
+    ]
   }
 }
 
@@ -70,25 +111,32 @@ source "qemu" "install" {
     })
   }
 
-  accelerator    = var.accelerator
-  disk_size      = local.disk_size[var.flavor]
-  disk_interface = "virtio"
-  cpus           = 1
-  headless       = true
-  format         = "raw"
+  qemu_binary       = local.qemu_binary[var.arch]
+  machine_type      = local.machine_type[var.arch]
+  efi_firmware_code = var.arch == "arm64" ? var.efi_code : ""
+  efi_firmware_vars = var.arch == "arm64" ? var.efi_vars : ""
+  qemuargs          = local.qemuargs[var.arch]
+  accelerator       = var.accelerator
+  disk_size         = local.disk_size[var.flavor]
+  disk_interface    = var.arch == "arm64" ? "virtio-scsi" : "virtio"
+  cdrom_interface   = var.arch == "arm64" ? "virtio-scsi" : ""
+  cpus              = 1
+  headless          = true
+  format            = "raw"
 
-  # boot_command and the com0 serial console (see install.conf.pkrtpl) are
-  # amd64/BIOS-specific; arm64 will need a UEFI boot sequence and its own console.
   boot_command = [
     "A<enter><wait>",
     "http://{{ .HTTPIP }}:{{ .HTTPPort }}/install.conf<enter>"
   ]
-  boot_wait        = "20s"
+  boot_wait        = "30s"
   shutdown_command = "halt -p"
 
   ssh_private_key_file = data.sshkey.install.private_key_path
   ssh_username         = "root"
   ssh_timeout          = "15m"
+
+  vnc_port_min = 5900
+  vnc_port_max = 5900
 }
 
 build {
