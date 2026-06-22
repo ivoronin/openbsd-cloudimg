@@ -28,7 +28,9 @@ Nothing static ships. Install authenticates with a per-build ephemeral ed25519 k
 - `/etc/ssh/ssh_host_*` (sshd regenerates these on first boot)
 - isakmpd and iked private keys
 - `/etc/soii.key`, the SLAAC IPv6 address secret
-- `/var/db/dhcpleased/*`, `/var/db/acpi/*`
+- the RNG seed (`/etc/random.seed`, `/var/db/host.random`)
+- DHCP leases, cached ACPI tables, the ntpd drift file
+- build-host traces: `/var/log/*` (truncated), shell history, `/tmp`
 
 Identity arrives at first boot from cloud-init (see [Configuration](#configuration)).
 
