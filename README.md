@@ -7,7 +7,7 @@ Packer templates that build sterile OpenBSD cloud images with a built-in minimal
 
 ## Table of Contents
 
-[Overview](#overview) · [Sterility](#sterility) · [Features](#features) · [Build](#build) · [Releases](#releases) · [Configuration](#configuration) · [Requirements](#requirements) · [License](#license)
+[Overview](#overview) · [Sterility](#sterility) · [Features](#features) · [Build](#build) · [Releases](#releases) · [Running locally](#running-locally) · [Configuration](#configuration) · [Requirements](#requirements) · [License](#license)
 
 ```bash
 # OpenBSD publishes no official cloud image. Build one:
@@ -84,6 +84,55 @@ gh attestation verify openbsd-7.9-amd64-base-*.img.gz --repo ivoronin/openbsd-cl
 ```
 
 Assets are named `openbsd-<ver>-<arch>-<flavor>-<gitref>-<timestamp>.img.gz`.
+
+## Running locally
+
+Boot a built or downloaded image on your own machine. Both paths hand cloud-init a NoCloud (CIDATA) seed, so it injects your key into the `openbsd` user on first boot.
+
+### kvm
+
+```bash
+ssh-keygen -t ed25519 -f ./id_openbsd -N ''
+
+# CIDATA seed carrying your public key
+cat > meta-data <<EOF
+local-hostname: obsd1
+public-keys:
+  - $(cat id_openbsd.pub)
+EOF
+xorriso -as mkisofs -V CIDATA -J -r -o seed.iso meta-data
+
+# raw .img from make build, or gunzip a release first
+qemu-system-x86_64 -accel kvm -m 1G -nographic \
+  -drive file=openbsd-7.9-amd64-base.img,format=raw,if=virtio \
+  -nic user,model=virtio,hostfwd=tcp::2222-:22 \
+  -cdrom seed.iso
+
+ssh -i id_openbsd -p 2222 openbsd@localhost
+```
+
+### vmd
+
+```bash
+ssh-keygen -t ed25519 -f ./id_openbsd -N ''
+
+# CIDATA seed carrying your public key (mkisofs: doas pkg_add cdrtools)
+cat > meta-data <<EOF
+local-hostname: obsd1
+public-keys:
+  - $(cat id_openbsd.pub)
+EOF
+mkisofs -V CIDATA -J -r -o seed.iso meta-data
+
+# first disk is the image, second the seed; -L gives the VM a local IP
+doas rcctl start vmd
+doas vmctl start obsd1 -m 1G -L \
+  -d openbsd-7.9-amd64-base.img \
+  -d seed.iso
+
+# watch boot if you like: doas vmctl console obsd1
+ssh -i id_openbsd openbsd@100.64.0.3
+```
 
 ## Configuration
 
