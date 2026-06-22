@@ -126,12 +126,11 @@ EOF
 mkhybrid -o cidata.iso -r -V CIDATA meta-data
 
 # first disk is the image, second the seed; -L gives the VM a local IP
-doas rcctl start vmd
-doas vmctl start obsd1 -m 1G -L \
+rcctl start vmd
+vmctl start obsd1 -m 1G -L \
   -d openbsd-7.9-amd64-base.img \
   -d cidata.iso
 
-# watch boot if you like: doas vmctl console obsd1
 ssh -i id_openbsd openbsd@100.64.0.3
 ```
 
