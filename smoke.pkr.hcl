@@ -46,6 +46,11 @@ variable "efi_vars" {
   default = ""
 }
 
+variable "cloud_init_source" {
+  type    = string
+  default = "imds"
+}
+
 data "sshkey" "test" {
   type = "ed25519"
 }
@@ -59,16 +64,13 @@ locals {
     amd64 = "pc"
     arm64 = "virt"
   }
-  # Fakes an EC2 IMDS at 169.254.169.254 for the image's cloud-init. Three SLIRP
-  # constraints: (1) a guestfwd guest address must be inside the guest network,
-  # hence the link-local 169.254.0.0/16; (2) the forward target is a host-side
-  # connect, so it points at Packer's HTTP server on 127.0.0.1, not {{ .HTTPIP }}
-  # (the guest gateway, unreachable from the host); (3) it uses "-cmd:nc" not
-  # "-tcp:" because SLIRP does not forward a write-callback guestfwd's host close
-  # to the guest, which hangs OpenBSD ftp; nc relays the close. hostfwd reaches
-  # sshd regardless of the guest's address.
+  # imds: SLIRP-faked IMDS - guestfwd 169.254.169.254:80 to Packer's HTTP server
+  # via "-cmd:nc" (SLIRP does not forward a write-callback guestfwd's host close,
+  # which hangs OpenBSD ftp; nc relays it). cidata: SSH only, no IMDS, so a login
+  # proves the disk path. hostfwd reaches sshd in both.
+  netdev = var.cloud_init_source == "imds" ? "user,id=n0,net=169.254.0.0/16,host=169.254.0.2,dhcpstart=169.254.0.15,hostfwd=tcp::{{ .SSHHostPort }}-:22,guestfwd=tcp:169.254.169.254:80-cmd:nc 127.0.0.1 {{ .HTTPPort }}" : "user,id=n0,hostfwd=tcp::{{ .SSHHostPort }}-:22"
   net_qemuargs = [
-    ["-netdev", "user,id=n0,net=169.254.0.0/16,host=169.254.0.2,dhcpstart=169.254.0.15,hostfwd=tcp::{{ .SSHHostPort }}-:22,guestfwd=tcp:169.254.169.254:80-cmd:nc 127.0.0.1 {{ .HTTPPort }}"],
+    ["-netdev", local.netdev],
     ["-device", "virtio-net,netdev=n0"],
   ]
   # arm64 "virt" has no default display or PS/2 keyboard; add a virtio-gpu frame-
@@ -104,10 +106,18 @@ source "qemu" "smoke" {
   accelerator       = var.accelerator
   headless          = true
 
-  http_content = {
+  http_content = var.cloud_init_source == "imds" ? {
     "/latest/meta-data/public-keys/0/openssh-key" = data.sshkey.test.public_key
     "/latest/meta-data/local-hostname"            = "smoke-test"
-  }
+  } : {}
+
+  # cidata: Packer builds a CIDATA-labeled ISO9660 from this content and attaches
+  # it; the ephemeral key is the sshkey data source Packer already holds. The
+  # meta-data is exactly the block-YAML shape cloud-init's parser expects.
+  cd_label = var.cloud_init_source == "cidata" ? "cidata" : null
+  cd_content = var.cloud_init_source == "cidata" ? {
+    "meta-data" = "local-hostname: smoke-test\npublic-keys:\n  - ${data.sshkey.test.public_key}\n"
+  } : null
 
   qemuargs = concat(local.arch_qemuargs[var.arch], local.net_qemuargs)
 

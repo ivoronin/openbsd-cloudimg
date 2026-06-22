@@ -2,6 +2,7 @@ VER          ?= 7.9
 ARCH         ?= amd64
 FLAVOR       ?= base
 ACCEL        ?= kvm
+CLOUD_INIT_SOURCE  ?=
 # Optional debug flags - set to 1 to drop a provisioning step from the build.
 DISABLE_SYSPATCH   ?=
 DISABLE_CLOUD_INIT ?=
@@ -26,9 +27,14 @@ build: $(IMG)
 
 compress: $(IMGGZ)
 
+SMOKE_SOURCES = $(if $(CLOUD_INIT_SOURCE),$(CLOUD_INIT_SOURCE),imds cidata)
+
 smoke: $(IMG)
 	packer init smoke.pkr.hcl
-	packer build -force -var image=$(IMG) -var version=$(VER) -var arch=$(ARCH) -var flavor=$(FLAVOR) -var accelerator=$(ACCEL) -var efi_code=$(EFI_CODE) -var efi_vars=$(EFI_VARS) smoke.pkr.hcl
+	@for s in $(SMOKE_SOURCES); do \
+	  echo "=== smoke: cloud_init_source=$$s ==="; \
+	  packer build -force -var cloud_init_source=$$s -var image=$(IMG) -var version=$(VER) -var arch=$(ARCH) -var flavor=$(FLAVOR) -var accelerator=$(ACCEL) -var efi_code=$(EFI_CODE) -var efi_vars=$(EFI_VARS) smoke.pkr.hcl || exit 1; \
+	done
 
 $(IMG): $(SOURCES) images.json
 	packer init build.pkr.hcl
