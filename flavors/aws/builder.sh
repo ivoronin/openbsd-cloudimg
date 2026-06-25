@@ -7,8 +7,9 @@ set -eu
 ver="$1"; target="$2"
 conf=$(echo "$target" | tr '[:lower:]' '[:upper:]')   # aws -> AWS
 machine=$(machine)
-tdir=/home/build/$target
+tdir=/home/flavors/$target
 src=$tdir/$ver
+[ -d "$src" ] || { echo "build: target tree $src not found (bad upload path?)" >&2; exit 1; }
 stage=/home/site
 tag=$(echo "$ver" | tr -d .)
 
