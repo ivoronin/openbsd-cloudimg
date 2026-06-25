@@ -37,7 +37,8 @@ Identity arrives at first boot from cloud-init (see [Configuration](#configurati
 ## Features
 
 - Two flavors: `base` (minimal, 10G) and `full` (all sets, 40G).
-- amd64 and arm64 (arm64 builds under UEFI).
+- Build targets: `generic` (stock kernel) or `aws` (a custom kernel patched for EC2/Nitro, built in a separate builder VM - see [Build](#build)).
+- amd64 (BIOS/MBR or UEFI/GPT firmware) and arm64 (UEFI/GPT only).
 - A minimal cloud-init client: ~120 lines of base Perl, nothing from ports.
 - Two metadata sources: a NoCloud (CIDATA) disk, then AWS-style IMDS.
 - Ships fully patched, with syspatch run at build time.
@@ -50,11 +51,14 @@ One `make build` produces one image:
 make build VER=7.9 ARCH=amd64 FLAVOR=base
 ```
 
-Output lands at `output/build/<arch>/<version>/<flavor>/openbsd-<ver>-<arch>-<flavor>.img`. `ARCH` and `ACCEL` default to the build host: native acceleration when the target arch matches, `tcg` when it differs. Override either as needed. Add a release by putting its `installNN.iso` SHA256 in `images.json`.
+Output lands at `output/build/<arch>/<version>/<build>/<flavor>/<firmware>/openbsd-<ver>-<arch>-<build>-<flavor>-<firmware>.img`. `ARCH` and `ACCEL` default to the build host: native acceleration when the target arch matches, `tcg` when it differs. `FIRMWARE` defaults to `bios` on amd64 (legacy/MBR, boots qemu-SeaBIOS and vmd) and `uefi` on arm64 (its only option); pass `FIRMWARE=uefi` for an amd64 cloud image (EC2 needs UEFI). Note that an amd64 image is either BIOS/MBR or UEFI/GPT, never both - OpenBSD `installboot` sets up one or the other. Add a release by putting its `installNN.iso` SHA256 in `images.json`.
+
+`BUILD` selects the kernel. `generic` (the default) ships the stock OpenBSD kernel. `aws` runs a two-stage build: a throwaway builder VM (the comp toolchain plus a signify-verified `sys.tar.gz`) applies the patch-set under `build/aws/<ver>/`, builds the custom `AWS.MP` and `AWS` (SP) kernels, packs the whole site set there, and the image stage installs them as `/bsd` and `/bsd.sp` through that site set - so a `base` image ships patched kernels with no compiler ever installed (`make build BUILD=aws FLAVOR=base`). The aws kernel carries the `nvme(4)` MQES clamp that EBS NVMe on Nitro needs. It is GENERIC minus the GPU/drm drivers built under a custom config name, which keeps `uname` honest (`AWS.MP`) and makes syspatch apply userland errata only - a stock-kernel relink would drop the EC2 drivers and brick the boot. KARL is preserved: the builder ships relink kits for both kernels, so reorder_kernel re-randomises whichever is `/bsd` - boot `/bsd.sp` to dodge an MP-only bug. The driver fix can only be validated on EC2; locally the aws image just boots and runs cloud-init. The builder takes a couple of hours (two kernels, and OpenBSD's compile is taxed hard under qemu/hvf, whose emulated interrupt controller turns the build's interrupt storm into VM exits), so iterate on driver source on a KVM host or a persistent box, not here.
 
 Targets:
 
 - `make build` - build one image (default)
+- `make kernel` - build just the patched kernel for a target (the builder stage; `make build BUILD=aws` runs it automatically)
 - `make smoke` - boot the image and check cloud-init injected the key and hostname, for both sources (or one, via `CLOUD_INIT_SOURCE`)
 - `make compress` - xz-compress the image to `.img.xz`
 - `make clean` - remove `output/`
@@ -66,24 +70,26 @@ Variables:
 | `VER` | OpenBSD release | `7.9` |
 | `ARCH` | `amd64` or `arm64` | (host arch) |
 | `FLAVOR` | `base` (minimal) or `full` (all sets) | `base` |
+| `BUILD` | `generic` (stock kernel) or `aws` (patched kernel via the builder stage) | `generic` |
+| `FIRMWARE` | `bios` (MBR, amd64 legacy/vmd) or `uefi` (GPT) | `bios` amd64; `uefi` for arm64 or `aws` |
 | `ACCEL` | QEMU accelerator; native (`kvm`/`hvf`) when the target arch matches the host, else `tcg` | (auto) |
 | `ISO_CHECKSUM` | Installer ISO SHA256; read from `images.json` when unset | (from `images.json`) |
 | `CLOUD_INIT_SOURCE` | `make smoke` only: limit to `imds` or `cidata` | (both) |
-| `EFI_CODE` / `EFI_VARS` | arm64 UEFI firmware paths; auto-located | (auto) |
+| `EFI_CODE` / `EFI_VARS` | UEFI firmware paths for `uefi` builds; auto-located | (auto) |
 | `DISABLE_SYSPATCH` | `1` skips syspatch (debug) | (unset) |
 | `DISABLE_CLOUD_INIT` | `1` skips the cloud-init install (debug) | (unset) |
 | `DISABLE_CLEANUP` | `1` skips the identity wipe (debug) | (unset) |
 
 ## Releases
 
-CI builds the full matrix (release × arch × flavor), smoke-tests both metadata sources, and publishes attested images to [Releases](https://github.com/ivoronin/openbsd-cloudimg/releases). Inputs are pinned for reproducibility: installer ISO checksums, the Packer version, and SHA-pinned actions.
+CI builds the full matrix (release × arch × flavor × firmware; arm64 is uefi-only), smoke-tests both metadata sources, and publishes attested images to [Releases](https://github.com/ivoronin/openbsd-cloudimg/releases). Inputs are pinned for reproducibility: installer ISO checksums, the Packer version, and SHA-pinned actions.
 
 ```bash
-gh release download -R ivoronin/openbsd-cloudimg -p 'openbsd-7.9-amd64-base-*.img.xz'
-gh attestation verify openbsd-7.9-amd64-base-*.img.xz --repo ivoronin/openbsd-cloudimg
+gh release download -R ivoronin/openbsd-cloudimg -p 'openbsd-7.9-amd64-generic-base-uefi-*.img.xz'
+gh attestation verify openbsd-7.9-amd64-generic-base-uefi-*.img.xz --repo ivoronin/openbsd-cloudimg
 ```
 
-Assets are named `openbsd-<ver>-<arch>-<flavor>-<gitref>-<timestamp>.img.xz`.
+Assets are named `openbsd-<ver>-<arch>-<build>-<flavor>-<firmware>-<gitref>-<timestamp>.img.xz`. The release matrix builds the `generic` target; `aws` images are built on demand (`make build BUILD=aws`).
 
 ## Running locally
 
@@ -104,7 +110,7 @@ xorriso -as mkisofs -V CIDATA -J -r -o cidata.iso meta-data
 
 # raw .img from make build, or unxz a release first
 qemu-system-x86_64 -accel kvm -m 1G -nographic \
-  -drive file=openbsd-7.9-amd64-base.img,format=raw,if=virtio \
+  -drive file=openbsd-7.9-amd64-generic-base-bios.img,format=raw,if=virtio \
   -nic user,model=virtio,hostfwd=tcp::2222-:22 \
   -cdrom cidata.iso
 
@@ -128,7 +134,7 @@ mkhybrid -o cidata.iso -r -V CIDATA meta-data
 # first disk is the image, second the seed; -L gives the VM a local IP
 rcctl start vmd
 vmctl start obsd1 -m 1G -L \
-  -d openbsd-7.9-amd64-base.img \
+  -d openbsd-7.9-amd64-generic-base-bios.img \
   -d cidata.iso
 
 ssh -i id_openbsd openbsd@100.64.0.3

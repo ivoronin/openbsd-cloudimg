@@ -36,6 +36,11 @@ variable "flavor" {
   default = "base"
 }
 
+variable "firmware" {
+  type    = string
+  default = "uefi"
+}
+
 variable "efi_code" {
   type    = string
   default = ""
@@ -56,6 +61,7 @@ data "sshkey" "test" {
 }
 
 locals {
+  use_efi = var.arch == "arm64" || var.firmware == "uefi"
   qemu_binary = {
     amd64 = "qemu-system-x86_64"
     arm64 = "qemu-system-aarch64"
@@ -92,7 +98,7 @@ locals {
 # IMDS work - there is no other way into the cleaned image.
 source "qemu" "smoke" {
   vm_name          = "smoke-test"
-  output_directory = "output/smoke/${var.arch}/${var.version}/${var.flavor}"
+  output_directory = "output/smoke/${var.arch}/${var.version}/${var.flavor}/${var.firmware}"
 
   disk_image       = true
   iso_url          = var.image
@@ -103,8 +109,8 @@ source "qemu" "smoke" {
 
   qemu_binary       = local.qemu_binary[var.arch]
   machine_type      = local.machine_type[var.arch]
-  efi_firmware_code = var.arch == "arm64" ? var.efi_code : ""
-  efi_firmware_vars = var.arch == "arm64" ? var.efi_vars : ""
+  efi_firmware_code = local.use_efi ? var.efi_code : ""
+  efi_firmware_vars = local.use_efi ? var.efi_vars : ""
   accelerator       = var.accelerator
   headless          = true
 

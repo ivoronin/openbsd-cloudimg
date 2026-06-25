@@ -1,0 +1,25 @@
+--- sys/dev/pci/files.pci
++++ sys/dev/pci/files.pci
+@@ -903,3 +903,8 @@
+ 
+ include "dev/pci/files.agp"
+ include "dev/pci/drm/files.drm"
++
++# Amazon Elastic Network Adapter (ENA)
++device	ena: ether, ifnet, ifmedia
++attach	ena at pci
++file	dev/pci/if_ena.c		ena
+--- sys/dev/pci/pcidevs
++++ sys/dev/pci/pcidevs
+@@ -10533,3 +10533,11 @@
+ product ZYDAS ZD1201		0x2100	ZD1201
+ product ZYDAS ZD1202		0x2102	ZD1202
+ product ZYDAS ZD1205		0x2105	ZD1205
++
++/* Amazon */
++vendor AMAZON 0x1d0f Amazon.com
++
++product AMAZON ENA_PF 0x0ec2 Elastic Network Adapter (PF)
++product AMAZON ENA_PF_RSERV0 0x1ec2 Elastic Network Adapter (PF, LLQ)
++product AMAZON ENA_VF 0xec20 Elastic Network Adapter (VF)
++product AMAZON ENA_VF_RSERV0 0xec21 Elastic Network Adapter (VF, LLQ)

@@ -1,0 +1,6 @@
+[submodule "build/aws/7.8/files/openbsd-ena"]
+	path = build/aws/7.8/files/openbsd-ena
+	url = https://github.com/ajokela/openbsd-ena
+[submodule "build/aws/7.9/files/openbsd-ena"]
+	path = build/aws/7.9/files/openbsd-ena
+	url = https://github.com/ajokela/openbsd-ena

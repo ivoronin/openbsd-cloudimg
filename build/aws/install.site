@@ -1,0 +1,18 @@
+#!/bin/ksh
+# Runs in the install chroot at the end of the aws install: drops our patched kernel in
+# place and stages the KARL relink kit. (cloud-init is set up separately, on boot.)
+set -e
+
+# Install our kernels: AWS.MP as /bsd (the booted one; record its hash for
+# reorder_kernel) and AWS as /bsd.sp.
+cp /bsd.aws    /bsd
+cp /bsd.sp.aws /bsd.sp
+rm -f /bsd.aws /bsd.sp.aws
+sha256 -h /var/db/kernel.SHA256 /bsd
+
+# Pre-extract both relink kits (AWS + AWS.MP) and drop the stock kernel.tgz:
+# reorder_kernel's own member-extraction comes up empty for our kit, so first-boot
+# reorder uses these dirs - and KARL works whichever kernel becomes /bsd.
+mkdir -p /usr/share/relink/kernel
+tar -C /usr/share/relink/kernel -xzf /bsd.relink.tgz
+rm -f /bsd.relink.tgz /usr/share/relink/kernel.tgz

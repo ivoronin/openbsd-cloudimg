@@ -1,0 +1,12 @@
+--- sys/arch/amd64/pci/acpipci.c
++++ sys/arch/amd64/pci/acpipci.c
+@@ -212,7 +212,8 @@
+ 	    PCI_SUBCLASS(class) != PCI_SUBCLASS_BRIDGE_HOST &&
+ 	    PCI_VENDOR(id) != PCI_VENDOR_AMD &&
+ 	    PCI_VENDOR(id) != PCI_VENDOR_NVIDIA &&
+-	    PCI_VENDOR(id) != PCI_VENDOR_INTEL)
++	    PCI_VENDOR(id) != PCI_VENDOR_INTEL &&
++	    PCI_VENDOR(id) != PCI_VENDOR_AMAZON)
+ 		pba.pba_flags &= ~PCI_FLAGS_MSI_ENABLED;
+ 
+ 	/*

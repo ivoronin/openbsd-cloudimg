@@ -16,21 +16,22 @@ jobs:
   setup:
     runs-on: ubuntu-24.04
     outputs:
-      images: ${{ steps.gen.outputs.images }}
+      builds: ${{ steps.gen.outputs.builds }}
       timestamp: ${{ steps.gen.outputs.timestamp }}
       gitref: ${{ steps.gen.outputs.gitref }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - id: gen
         run: |
-          echo "images=$(jq -c . images.json)" >> "$GITHUB_OUTPUT"
+          # Build matrix: each image x build target (generic, aws), base flavor, uefi.
+          echo "builds=$(jq -c '[.[] as $i | ("generic","aws") as $b | {version:$i.version,arch:$i.arch,iso_checksum:$i.iso_checksum,build:$b,flavor:"base",firmware:"uefi"}]' images.json)" >> "$GITHUB_OUTPUT"
           echo "timestamp=$(date -u +%Y%m%d%H%M)" >> "$GITHUB_OUTPUT"
           echo "gitref=${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
 
   build:
     needs: setup
     runs-on: ubuntu-24.04
-    name: ${{ matrix.image.version }}-${{ matrix.image.arch }}-${{ matrix.flavor }}
+    name: ${{ matrix.build.version }}-${{ matrix.build.arch }}-${{ matrix.build.build }}-${{ matrix.build.flavor }}-${{ matrix.build.firmware }}
     # packer init resolves plugins through the GitHub API; authenticate so the
     # parallel matrix does not exhaust the 60/hr unauthenticated limit that is
     # shared across all jobs on a runner's egress IP.
@@ -39,10 +40,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: ${{ fromJSON(needs.setup.outputs.images) }}
-        flavor: [base, full]
+        build: ${{ fromJSON(needs.setup.outputs.builds) }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          submodules: recursive # the aws build copies the ena driver from a submodule
 
       # GHA runners expose /dev/kvm but gate it behind the kvm group, which the
       # runner user is not a member of. This udev rule opens the device so qemu
@@ -57,7 +59,7 @@ jobs:
       - name: Install QEMU and Packer
         run: |
           sudo apt-get update
-          sudo apt-get install -y qemu-system-x86 qemu-system-arm qemu-efi-aarch64 qemu-utils xz-utils netcat-openbsd xorriso
+          sudo apt-get install -y qemu-system-x86 qemu-system-arm qemu-efi-aarch64 ovmf qemu-utils xz-utils netcat-openbsd xorriso
           wget -q "https://releases.hashicorp.com/packer/${PACKER_VERSION}/packer_${PACKER_VERSION}_linux_amd64.zip"
           sudo unzip -o "packer_${PACKER_VERSION}_linux_amd64.zip" -d /usr/local/bin
           packer version
@@ -66,39 +68,45 @@ jobs:
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: iso
-          key: openbsd-iso-${{ matrix.image.version }}-${{ matrix.image.arch }}-${{ matrix.image.iso_checksum }}
+          key: openbsd-iso-${{ matrix.build.version }}-${{ matrix.build.arch }}-${{ matrix.build.iso_checksum }}
 
       - name: Build image
         run: |
           # No ACCEL: the Makefile picks kvm for the native amd64 build and tcg
           # for the cross-arch (emulated) arm64 build.
           make build \
-            VER="${{ matrix.image.version }}" \
-            ARCH="${{ matrix.image.arch }}" \
-            FLAVOR="${{ matrix.flavor }}" \
-            ISO_CHECKSUM="${{ matrix.image.iso_checksum }}"
+            VER="${{ matrix.build.version }}" \
+            ARCH="${{ matrix.build.arch }}" \
+            BUILD="${{ matrix.build.build }}" \
+            FLAVOR="${{ matrix.build.flavor }}" \
+            FIRMWARE="${{ matrix.build.firmware }}" \
+            ISO_CHECKSUM="${{ matrix.build.iso_checksum }}"
 
       - name: Smoke test image
         run: |
           make smoke \
-            VER="${{ matrix.image.version }}" \
-            ARCH="${{ matrix.image.arch }}" \
-            FLAVOR="${{ matrix.flavor }}"
+            VER="${{ matrix.build.version }}" \
+            ARCH="${{ matrix.build.arch }}" \
+            BUILD="${{ matrix.build.build }}" \
+            FLAVOR="${{ matrix.build.flavor }}" \
+            FIRMWARE="${{ matrix.build.firmware }}"
 
       - name: Compress image
         if: ${{ success() && github.event_name == 'workflow_dispatch' }}
         run: |
           make compress \
-            VER="${{ matrix.image.version }}" \
-            ARCH="${{ matrix.image.arch }}" \
-            FLAVOR="${{ matrix.flavor }}"
+            VER="${{ matrix.build.version }}" \
+            ARCH="${{ matrix.build.arch }}" \
+            BUILD="${{ matrix.build.build }}" \
+            FLAVOR="${{ matrix.build.flavor }}" \
+            FIRMWARE="${{ matrix.build.firmware }}"
 
       - name: Upload artifacts
         if: ${{ success() && github.event_name == 'workflow_dispatch' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: openbsd-${{ matrix.image.version }}-${{ matrix.image.arch }}-${{ matrix.flavor }}
-          path: output/build/${{ matrix.image.arch }}/${{ matrix.image.version }}/${{ matrix.flavor }}/*.img.xz
+          name: openbsd-${{ matrix.build.version }}-${{ matrix.build.arch }}-${{ matrix.build.build }}-${{ matrix.build.flavor }}-${{ matrix.build.firmware }}
+          path: output/build/${{ matrix.build.arch }}/${{ matrix.build.version }}/${{ matrix.build.build }}/${{ matrix.build.flavor }}/${{ matrix.build.firmware }}/*.img.xz
           if-no-files-found: error
 
   release:

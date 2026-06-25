@@ -1,0 +1,12 @@
+--- sys/dev/ic/nvme.c
++++ sys/dev/ic/nvme.c
+@@ -374,7 +374,8 @@
+ 	}
+ 	nccbs = 64;
+ 
+-	sc->sc_q = nvme_q_alloc(sc, NVME_IO_Q, 128, sc->sc_dstrd);
++	sc->sc_q = nvme_q_alloc(sc, NVME_IO_Q, MIN(128, NVME_CAP_MQES(cap)),
++	    sc->sc_dstrd);
+ 	if (sc->sc_q == NULL) {
+ 		printf("%s: unable to allocate io q\n", DEVNAME(sc));
+ 		goto disable;
