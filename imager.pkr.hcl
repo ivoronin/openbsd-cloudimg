@@ -27,9 +27,9 @@ variable "iso_checksum" {
   description = "Pinned installer ISO checksum, e.g. sha256:abc..."
 }
 
-variable "flavor" {
+variable "profile" {
   type        = string
-  description = "Image flavor: base (minimal) or full (all sets)"
+  description = "Profile: base (minimal) or full (all sets)"
   default     = "base"
 }
 
@@ -39,9 +39,9 @@ variable "firmware" {
   default     = "uefi"
 }
 
-variable "build" {
+variable "flavor" {
   type        = string
-  description = "Build target: generic (stock kernel) or aws (patched kernel)"
+  description = "Flavor: generic (stock kernel) or aws (patched kernel)"
   default     = "generic"
 }
 
@@ -69,40 +69,18 @@ variable "set_dir" {
   default     = ""
 }
 
-variable "disable_syspatch" {
-  type        = bool
-  description = "Skip the syspatch provisioning step (debug builds)"
-  default     = false
-}
-
-variable "disable_cloud_init" {
-  type        = bool
-  description = "Skip cloud-init setup - its file upload and cloud.sh (debug builds)"
-  default     = false
-}
-
-variable "disable_cleanup" {
-  type        = bool
-  description = "Skip the cleanup provisioning step (debug builds)"
-  default     = false
-}
-
 data "sshkey" "install" {
   type = "ed25519"
 }
 
 locals {
   tag        = replace(var.version, ".", "")
-  image_name = "openbsd-${var.version}-${var.arch}-${var.build}-${var.flavor}-${var.firmware}"
+  image_name = "openbsd-${var.version}-${var.arch}-${var.flavor}-${var.profile}-${var.firmware}"
   # arm64 is UEFI-only; on amd64, uefi means GPT and bios means MBR (installboot picks one).
   use_efi = var.arch == "arm64" || var.firmware == "uefi"
-  provision_scripts = compact([
-    var.disable_syspatch ? "" : "scripts/syspatch.sh",
-    var.disable_cloud_init ? "" : "scripts/cloud.sh",
-    var.disable_cleanup ? "" : "scripts/cleanup.sh",
-  ])
+  provision_scripts = ["scripts/syspatch.sh", "scripts/cloud.sh", "scripts/cleanup.sh"]
   # The site set rides cd1 only for non-generic targets.
-  has_site = var.build != "generic"
+  has_site = var.flavor != "generic"
   sets = {
     base = "-man* -game* -x* -comp*"
     full = "*"
@@ -144,9 +122,9 @@ locals {
   }
 }
 
-source "qemu" "image" {
+source "qemu" "imager" {
   vm_name          = "${local.image_name}.img"
-  output_directory = "output/build/${var.arch}/${var.version}/${var.build}/${var.flavor}/${var.firmware}"
+  output_directory = "output/images/${var.arch}/${var.version}/${var.flavor}/${var.profile}/${var.firmware}"
 
   iso_checksum = var.iso_checksum
   iso_url      = "https://cdn.openbsd.org/pub/OpenBSD/${var.version}/${var.arch}/install${local.tag}.iso"
@@ -156,7 +134,7 @@ source "qemu" "image" {
   http_content = {
     "/install.conf" = templatefile("install.conf.pkrtpl", {
       "ssh_public_key" : data.sshkey.install.public_key,
-      "sets" : local.sets[var.flavor],
+      "sets" : local.sets[var.profile],
       "disk_answer" : local.use_efi ? "G" : "W",
       "version" : var.version,
       "arch" : var.arch,
@@ -174,7 +152,7 @@ source "qemu" "image" {
   efi_firmware_vars = local.use_efi ? var.efi_vars : ""
   qemuargs          = local.qemuargs[var.arch]
   accelerator       = var.accelerator
-  disk_size         = local.disk_size[var.flavor]
+  disk_size         = local.disk_size[var.profile]
   disk_interface    = local.use_efi ? "virtio-scsi" : "virtio"
   cdrom_interface   = local.use_efi ? "virtio-scsi" : ""
   cpus              = 1
@@ -198,18 +176,15 @@ source "qemu" "image" {
 }
 
 build {
-  sources = ["source.qemu.image"]
+  sources = ["source.qemu.imager"]
 
   # cloud-init client; scripts/cloud.sh wires the user, doas and rc.local.
   provisioner "file" {
     source      = "cloud-init.pl"
     destination = "/usr/local/sbin/cloud-init"
-    except      = var.disable_cloud_init ? ["qemu.image"] : []
   }
 
-  # except-ing the sole source is Packer's only way to skip a provisioner conditionally.
   provisioner "shell" {
     scripts = local.provision_scripts
-    except  = length(local.provision_scripts) == 0 ? ["qemu.image"] : []
   }
 }

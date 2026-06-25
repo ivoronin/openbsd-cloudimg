@@ -22,9 +22,9 @@ variable "arch" {
   default     = "amd64"
 }
 
-variable "build" {
+variable "flavor" {
   type        = string
-  description = "Build target whose patch-set to apply (e.g. aws)"
+  description = "Flavor whose patch-set to apply (e.g. aws)"
 }
 
 variable "iso_checksum" {
@@ -54,7 +54,7 @@ variable "cpus" {
 }
 
 # Throwaway builder VM with the comp toolchain; never shipped, so SSH provisioning is fine.
-data "sshkey" "build" {
+data "sshkey" "builder" {
   type = "ed25519"
 }
 
@@ -71,7 +71,7 @@ locals {
     amd64 = "pc"
     arm64 = "virt"
   }
-  # arm64 virt wiring (see image.pkr.hcl), no cd1.
+  # arm64 virt wiring (see imager.pkr.hcl), no cd1.
   qemuargs = {
     amd64 = []
     arm64 = [
@@ -85,17 +85,17 @@ locals {
   }
 }
 
-source "qemu" "build" {
-  vm_name          = "builder-${var.version}-${var.arch}-${var.build}.img"
-  output_directory = "output/builder/${var.arch}/${var.version}/${var.build}"
+source "qemu" "builder" {
+  vm_name          = "builder-${var.version}-${var.arch}-${var.flavor}.img"
+  output_directory = "output/builder/${var.arch}/${var.version}/${var.flavor}"
 
   iso_checksum    = var.iso_checksum
   iso_url         = "https://cdn.openbsd.org/pub/OpenBSD/${var.version}/${var.arch}/install${local.tag}.iso"
   iso_target_path = "iso/openbsd-${var.version}-${var.arch}.iso"
 
   http_content = {
-    "/install.conf" = templatefile("build.conf.pkrtpl", {
-      "ssh_public_key" : data.sshkey.build.public_key,
+    "/install.conf" = templatefile("builder.conf.pkrtpl", {
+      "ssh_public_key" : data.sshkey.builder.public_key,
       "disk_answer" : local.use_efi ? "G" : "W"
     })
   }
@@ -121,7 +121,7 @@ source "qemu" "build" {
   boot_wait        = var.accelerator == "tcg" ? "60s" : "30s"
   shutdown_command = "halt -p"
 
-  ssh_private_key_file = data.sshkey.build.private_key_path
+  ssh_private_key_file = data.sshkey.builder.private_key_path
   ssh_username         = "root"
   ssh_timeout          = "20m"
 
@@ -130,27 +130,27 @@ source "qemu" "build" {
 }
 
 build {
-  sources = ["source.qemu.build"]
+  sources = ["source.qemu.builder"]
 
-  # upload the build/ tree, then run the target's build.sh
+  # upload the flavors/ tree, then run the flavor's builder.sh
   provisioner "file" {
-    source      = "build"
+    source      = "flavors"
     destination = "/home"
   }
   provisioner "shell" {
     inline = [
-      "ksh /home/build/${var.build}/build.sh ${var.version} ${var.build}",
+      "ksh /home/flavors/${var.flavor}/builder.sh ${var.version} ${var.flavor}",
     ]
   }
   # pull the finished site set: site<tag>.tgz + SHA256
   provisioner "file" {
     direction   = "download"
     source      = "/home/site/site${local.tag}.tgz"
-    destination = "output/sets/${var.arch}/${var.version}/${var.build}/"
+    destination = "output/site/${var.arch}/${var.version}/${var.flavor}/"
   }
   provisioner "file" {
     direction   = "download"
     source      = "/home/site/SHA256"
-    destination = "output/sets/${var.arch}/${var.version}/${var.build}/"
+    destination = "output/site/${var.arch}/${var.version}/${var.flavor}/"
   }
 }

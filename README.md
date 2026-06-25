@@ -7,11 +7,11 @@ Packer templates that build sterile OpenBSD cloud images with a built-in minimal
 
 ## Table of Contents
 
-[Overview](#overview) · [Sterility](#sterility) · [Features](#features) · [Build](#build) · [Releases](#releases) · [Running locally](#running-locally) · [Configuration](#configuration) · [Requirements](#requirements) · [License](#license)
+[Overview](#overview) · [Sterility](#sterility) · [Features](#features) · [Build](#build) · [AWS flavor](#aws-flavor) · [Releases](#releases) · [Running locally](#running-locally) · [Configuration](#configuration) · [Requirements](#requirements) · [License](#license)
 
 ```bash
 # OpenBSD publishes no official cloud image. Build one:
-make build VER=7.9 ARCH=amd64 FLAVOR=base
+make images VER=7.9 ARCH=amd64 PROFILE=base
 ```
 
 Out comes a raw `.img`: no root password, no host keys, no authorized_keys, just a pre-created `openbsd` user. On first boot cloud-init drops your SSH key into that account and sets the hostname, from EC2 IMDS or a NoCloud (CIDATA) disk.
@@ -36,8 +36,8 @@ Identity arrives at first boot from cloud-init (see [Configuration](#configurati
 
 ## Features
 
-- Two flavors: `base` (minimal, 10G) and `full` (all sets, 40G).
-- Build targets: `generic` (stock kernel) or `aws` (a custom kernel patched for EC2/Nitro, built in a separate builder VM - see [Build](#build)).
+- Two flavors: `generic` (stock kernel) or `aws` (a custom kernel patched for EC2/Nitro, built in a separate builder VM - see [AWS flavor](#aws-flavor)).
+- Two profiles: `base` (minimal, 10G) and `full` (all sets, 40G).
 - amd64 (BIOS/MBR or UEFI/GPT firmware) and arm64 (UEFI/GPT only).
 - A minimal cloud-init client: ~120 lines of base Perl, nothing from ports.
 - Two metadata sources: a NoCloud (CIDATA) disk, then AWS-style IMDS.
@@ -45,21 +45,21 @@ Identity arrives at first boot from cloud-init (see [Configuration](#configurati
 
 ## Build
 
-One `make build` produces one image:
+One `make images` produces one image:
 
 ```bash
-make build VER=7.9 ARCH=amd64 FLAVOR=base
+make images VER=7.9 ARCH=amd64 PROFILE=base
 ```
 
-Output lands at `output/build/<arch>/<version>/<build>/<flavor>/<firmware>/openbsd-<ver>-<arch>-<build>-<flavor>-<firmware>.img`. `ARCH` and `ACCEL` default to the build host: native acceleration when the target arch matches, `tcg` when it differs. `FIRMWARE` defaults to `bios` on amd64 (legacy/MBR, boots qemu-SeaBIOS and vmd) and `uefi` on arm64 (its only option); pass `FIRMWARE=uefi` for an amd64 cloud image (EC2 needs UEFI). Note that an amd64 image is either BIOS/MBR or UEFI/GPT, never both - OpenBSD `installboot` sets up one or the other. Add a release by putting its `installNN.iso` SHA256 in `images.json`.
+Output lands at `output/images/<arch>/<version>/<flavor>/<profile>/<firmware>/openbsd-<ver>-<arch>-<flavor>-<profile>-<firmware>.img`. `ARCH` and `ACCEL` default to the build host: native acceleration when the target arch matches, `tcg` when it differs. `FIRMWARE` defaults to `bios` on amd64 (legacy/MBR, boots qemu-SeaBIOS and vmd) and `uefi` on arm64 (its only option); pass `FIRMWARE=uefi` for an amd64 cloud image. Note that an amd64 image is either BIOS/MBR or UEFI/GPT, never both - OpenBSD `installboot` sets up one or the other. Add a release by putting its `installNN.iso` SHA256 in `images.json`.
 
-`BUILD` selects the kernel. `generic` (the default) ships the stock OpenBSD kernel. `aws` runs a two-stage build: a throwaway builder VM (the comp toolchain plus a signify-verified `sys.tar.gz`) applies the patch-set under `build/aws/<ver>/`, builds the custom `AWS.MP` and `AWS` (SP) kernels, packs the whole site set there, and the image stage installs them as `/bsd` and `/bsd.sp` through that site set - so a `base` image ships patched kernels with no compiler ever installed (`make build BUILD=aws FLAVOR=base`). The aws kernel carries the `nvme(4)` MQES clamp that EBS NVMe on Nitro needs. It is GENERIC minus the GPU/drm drivers built under a custom config name, which keeps `uname` honest (`AWS.MP`) and makes syspatch apply userland errata only - a stock-kernel relink would drop the EC2 drivers and brick the boot. KARL is preserved: the builder ships relink kits for both kernels, so reorder_kernel re-randomises whichever is `/bsd` - boot `/bsd.sp` to dodge an MP-only bug. The driver fix can only be validated on EC2; locally the aws image just boots and runs cloud-init. The builder takes a couple of hours (two kernels, and OpenBSD's compile is taxed hard under qemu/hvf, whose emulated interrupt controller turns the build's interrupt storm into VM exits), so iterate on driver source on a KVM host or a persistent box, not here.
+`FLAVOR` selects the kernel: `generic` (stock, the default) or `aws` (a custom EC2/Nitro kernel, see [AWS flavor](#aws-flavor)).
 
 Targets:
 
-- `make build` - build one image (default)
-- `make kernel` - build just the patched kernel for a target (the builder stage; `make build BUILD=aws` runs it automatically)
-- `make smoke` - boot the image and check cloud-init injected the key and hostname, for both sources (or one, via `CLOUD_INIT_SOURCE`)
+- `make images` - build one image (default)
+- `make site` - build the site set (the builder stage); a noop unless `FLAVOR=aws`, which `make images FLAVOR=aws` runs automatically
+- `make test` - boot the image and check cloud-init injected the key and hostname, for both sources
 - `make compress` - xz-compress the image to `.img.xz`
 - `make clean` - remove `output/`
 
@@ -69,27 +69,28 @@ Variables:
 |----------|-------------|---------|
 | `VER` | OpenBSD release | `7.9` |
 | `ARCH` | `amd64` or `arm64` | (host arch) |
-| `FLAVOR` | `base` (minimal) or `full` (all sets) | `base` |
-| `BUILD` | `generic` (stock kernel) or `aws` (patched kernel via the builder stage) | `generic` |
+| `FLAVOR` | `generic` (stock kernel) or `aws` (patched kernel via the builder stage) | `generic` |
+| `PROFILE` | `base` (minimal) or `full` (all sets) | `base` |
 | `FIRMWARE` | `bios` (MBR, amd64 legacy/vmd) or `uefi` (GPT) | `bios` amd64; `uefi` for arm64 or `aws` |
 | `ACCEL` | QEMU accelerator; native (`kvm`/`hvf`) when the target arch matches the host, else `tcg` | (auto) |
-| `ISO_CHECKSUM` | Installer ISO SHA256; read from `images.json` when unset | (from `images.json`) |
-| `CLOUD_INIT_SOURCE` | `make smoke` only: limit to `imds` or `cidata` | (both) |
 | `EFI_CODE` / `EFI_VARS` | UEFI firmware paths for `uefi` builds; auto-located | (auto) |
-| `DISABLE_SYSPATCH` | `1` skips syspatch (debug) | (unset) |
-| `DISABLE_CLOUD_INIT` | `1` skips the cloud-init install (debug) | (unset) |
-| `DISABLE_CLEANUP` | `1` skips the identity wipe (debug) | (unset) |
+
+## AWS flavor
+
+The `aws` flavor runs a two-stage build: a throwaway builder VM applies the patch-set under `flavors/aws/<ver>/`, builds the `AWS.MP` and `AWS` (SP) kernels into a site set, and the imager installs them as `/bsd` and `/bsd.sp`. So a `base` image ships patched kernels with no compiler installed (`make images FLAVOR=aws PROFILE=base`).
+
+The kernel is GENERIC minus GPU/drm (mostly to speed up builds), with EC2/Nitro fixes on top: the `nvme(4)` MQES clamp EBS NVMe needs, a PCIe-bridge patch, and a bundled (still WIP) ENA driver. It's built under a custom config, so `uname` stays honest and syspatch's kernel errata miss it - only userland errata land; a kernel CVE means a rebuilt image (`generic` gets them in place via syspatch as usual). KARL is preserved - relink kits for both kernels; boot `/bsd.sp` to dodge an MP-only bug.
 
 ## Releases
 
-CI builds the full matrix (release × arch × flavor × firmware; arm64 is uefi-only), smoke-tests both metadata sources, and publishes attested images to [Releases](https://github.com/ivoronin/openbsd-cloudimg/releases). Inputs are pinned for reproducibility: installer ISO checksums, the Packer version, and SHA-pinned actions.
+CI builds the matrix (release × arch × flavor, `base` profile, uefi firmware), tests both metadata sources, and publishes attested images to [Releases](https://github.com/ivoronin/openbsd-cloudimg/releases). Inputs are pinned for reproducibility: installer ISO checksums, the Packer version, and SHA-pinned actions.
 
 ```bash
 gh release download -R ivoronin/openbsd-cloudimg -p 'openbsd-7.9-amd64-generic-base-uefi-*.img.xz'
 gh attestation verify openbsd-7.9-amd64-generic-base-uefi-*.img.xz --repo ivoronin/openbsd-cloudimg
 ```
 
-Assets are named `openbsd-<ver>-<arch>-<build>-<flavor>-<firmware>-<gitref>-<timestamp>.img.xz`. The release matrix builds the `generic` target; `aws` images are built on demand (`make build BUILD=aws`).
+Assets are named `openbsd-<ver>-<arch>-<flavor>-<profile>-<firmware>-<gitref>-<timestamp>.img.xz`. The release matrix builds the `generic` flavor; `aws` images are built on demand (`make images FLAVOR=aws`).
 
 ## Running locally
 
@@ -108,7 +109,7 @@ public-keys:
 EOF
 xorriso -as mkisofs -V CIDATA -J -r -o cidata.iso meta-data
 
-# raw .img from make build, or unxz a release first
+# raw .img from make images, or unxz a release first
 qemu-system-x86_64 -accel kvm -m 1G -nographic \
   -drive file=openbsd-7.9-amd64-generic-base-bios.img,format=raw,if=virtio \
   -nic user,model=virtio,hostfwd=tcp::2222-:22 \
@@ -159,14 +160,14 @@ IMDS: with no CIDATA disk, cloud-init queries `http://169.254.169.254/latest`:
 - `meta-data/public-keys/0/openssh-key`
 - `meta-data/local-hostname`
 
-The key goes into `~openbsd/.ssh/authorized_keys` in a managed block, rewritten each boot, leaving your other keys alone; the hostname goes into `/etc/myname` and `/etc/hosts`. Build with `DISABLE_CLOUD_INIT=1` to omit all of it.
+The key goes into `~openbsd/.ssh/authorized_keys` in a managed block, rewritten each boot, leaving your other keys alone; the hostname goes into `/etc/myname` and `/etc/hosts`.
 
 ## Requirements
 
 - Build on Linux (KVM) or macOS (hvf), or anywhere QEMU runs with `ACCEL=tcg`. Native acceleration needs the host architecture to match the target.
 - Packer 1.15.4+, QEMU, `jq` (reads `images.json`), `xz` (`make compress`).
 - arm64 builds: edk2 aarch64 UEFI firmware (`qemu-efi-aarch64` on Debian/Ubuntu, bundled with QEMU on macOS), auto-located.
-- `make smoke`: `xorriso` (Packer builds the CIDATA test ISO with it; `hdiutil` on macOS) and `netcat-openbsd`.
+- `make test`: `xorriso` (Packer builds the CIDATA test ISO with it; `hdiutil` on macOS) and `netcat-openbsd`.
 
 ## License
 

@@ -13,7 +13,7 @@ packer {
 
 variable "image" {
   type        = string
-  description = "Path to the built raw .img to smoke-test"
+  description = "Path to the built raw .img to test"
 }
 
 variable "accelerator" {
@@ -31,7 +31,7 @@ variable "version" {
   default = "7.9"
 }
 
-variable "flavor" {
+variable "profile" {
   type    = string
   default = "base"
 }
@@ -96,9 +96,9 @@ locals {
 # holds those responses and qemuargs guestfwd redirects the guest's IMDS
 # requests to it. So logging in at all proves the image boots and cloud-init +
 # IMDS work - there is no other way into the cleaned image.
-source "qemu" "smoke" {
-  vm_name          = "smoke-test"
-  output_directory = "output/smoke/${var.arch}/${var.version}/${var.flavor}/${var.firmware}"
+source "qemu" "tester" {
+  vm_name          = "tester"
+  output_directory = "output/tester/${var.arch}/${var.version}/${var.profile}/${var.firmware}"
 
   disk_image       = true
   iso_url          = var.image
@@ -116,7 +116,7 @@ source "qemu" "smoke" {
 
   http_content = var.cloud_init_source == "imds" ? {
     "/latest/meta-data/public-keys/0/openssh-key" = data.sshkey.test.public_key
-    "/latest/meta-data/local-hostname"            = "smoke-test"
+    "/latest/meta-data/local-hostname"            = "tester"
   } : {}
 
   # cidata: Packer builds a CIDATA-labeled ISO9660 from this content and attaches
@@ -124,7 +124,7 @@ source "qemu" "smoke" {
   # meta-data is exactly the block-YAML shape cloud-init's parser expects.
   cd_label = var.cloud_init_source == "cidata" ? "CIDATA" : null
   cd_content = var.cloud_init_source == "cidata" ? {
-    "meta-data" = "local-hostname: smoke-test\npublic-keys:\n  - ${data.sshkey.test.public_key}\n"
+    "meta-data" = "local-hostname: tester\npublic-keys:\n  - ${data.sshkey.test.public_key}\n"
   } : null
 
   qemuargs = concat(local.arch_qemuargs[var.arch], local.net_qemuargs)
@@ -139,17 +139,17 @@ source "qemu" "smoke" {
 }
 
 build {
-  sources = ["source.qemu.smoke"]
+  sources = ["source.qemu.tester"]
 
   provisioner "shell" {
     # Login already proves boot, cloud-init, and ssh-key injection; assert that
     # cloud-init also applied the IMDS-provided local-hostname.
     inline = [<<-EOT
-      if [ "$(hostname)" != smoke-test ]; then
-        echo "hostname is '$(hostname)', expected smoke-test" >&2
+      if [ "$(hostname)" != tester ]; then
+        echo "hostname is '$(hostname)', expected tester" >&2
         exit 1
       fi
-      echo "smoke checks passed"
+      echo "test checks passed"
     EOT
     ]
   }

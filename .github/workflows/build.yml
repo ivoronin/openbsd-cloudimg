@@ -23,15 +23,15 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - id: gen
         run: |
-          # Build matrix: each image x build target (generic, aws), base flavor, uefi.
-          echo "builds=$(jq -c '[.[] as $i | ("generic","aws") as $b | {version:$i.version,arch:$i.arch,iso_checksum:$i.iso_checksum,build:$b,flavor:"base",firmware:"uefi"}]' images.json)" >> "$GITHUB_OUTPUT"
+          # Build matrix: amd64 x {generic,aws} flavor x {uefi,bios} firmware, base profile.
+          echo "builds=$(jq -c '[.[] as $i | select($i.arch=="amd64") | ("generic","aws") as $f | ("uefi","bios") as $fw | {version:$i.version,arch:$i.arch,iso_checksum:$i.iso_checksum,flavor:$f,profile:"base",firmware:$fw}]' images.json)" >> "$GITHUB_OUTPUT"
           echo "timestamp=$(date -u +%Y%m%d%H%M)" >> "$GITHUB_OUTPUT"
           echo "gitref=${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
 
   build:
     needs: setup
     runs-on: ubuntu-24.04
-    name: ${{ matrix.build.version }}-${{ matrix.build.arch }}-${{ matrix.build.build }}-${{ matrix.build.flavor }}-${{ matrix.build.firmware }}
+    name: ${{ matrix.build.version }}-${{ matrix.build.arch }}-${{ matrix.build.flavor }}-${{ matrix.build.profile }}-${{ matrix.build.firmware }}
     # packer init resolves plugins through the GitHub API; authenticate so the
     # parallel matrix does not exhaust the 60/hr unauthenticated limit that is
     # shared across all jobs on a runner's egress IP.
@@ -74,21 +74,21 @@ jobs:
         run: |
           # No ACCEL: the Makefile picks kvm for the native amd64 build and tcg
           # for the cross-arch (emulated) arm64 build.
-          make build \
+          make images \
             VER="${{ matrix.build.version }}" \
             ARCH="${{ matrix.build.arch }}" \
-            BUILD="${{ matrix.build.build }}" \
             FLAVOR="${{ matrix.build.flavor }}" \
+            PROFILE="${{ matrix.build.profile }}" \
             FIRMWARE="${{ matrix.build.firmware }}" \
             ISO_CHECKSUM="${{ matrix.build.iso_checksum }}"
 
-      - name: Smoke test image
+      - name: Test image
         run: |
-          make smoke \
+          make test \
             VER="${{ matrix.build.version }}" \
             ARCH="${{ matrix.build.arch }}" \
-            BUILD="${{ matrix.build.build }}" \
             FLAVOR="${{ matrix.build.flavor }}" \
+            PROFILE="${{ matrix.build.profile }}" \
             FIRMWARE="${{ matrix.build.firmware }}"
 
       - name: Compress image
@@ -97,16 +97,16 @@ jobs:
           make compress \
             VER="${{ matrix.build.version }}" \
             ARCH="${{ matrix.build.arch }}" \
-            BUILD="${{ matrix.build.build }}" \
             FLAVOR="${{ matrix.build.flavor }}" \
+            PROFILE="${{ matrix.build.profile }}" \
             FIRMWARE="${{ matrix.build.firmware }}"
 
       - name: Upload artifacts
         if: ${{ success() && github.event_name == 'workflow_dispatch' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: openbsd-${{ matrix.build.version }}-${{ matrix.build.arch }}-${{ matrix.build.build }}-${{ matrix.build.flavor }}-${{ matrix.build.firmware }}
-          path: output/build/${{ matrix.build.arch }}/${{ matrix.build.version }}/${{ matrix.build.build }}/${{ matrix.build.flavor }}/${{ matrix.build.firmware }}/*.img.xz
+          name: openbsd-${{ matrix.build.version }}-${{ matrix.build.arch }}-${{ matrix.build.flavor }}-${{ matrix.build.profile }}-${{ matrix.build.firmware }}
+          path: output/images/${{ matrix.build.arch }}/${{ matrix.build.version }}/${{ matrix.build.flavor }}/${{ matrix.build.profile }}/${{ matrix.build.firmware }}/*.img.xz
           if-no-files-found: error
 
   release:
