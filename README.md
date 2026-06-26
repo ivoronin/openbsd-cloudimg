@@ -7,7 +7,11 @@ Packer templates that build sterile OpenBSD cloud images with a built-in minimal
 
 ## Table of Contents
 
-[Overview](#overview) · [Sterility](#sterility) · [Features](#features) · [Build](#build) · [AWS flavor](#aws-flavor) · [Releases](#releases) · [Running locally](#running-locally) · [Configuration](#configuration) · [Requirements](#requirements) · [License](#license)
+[Why this exists](#why-this-exists) · [Overview](#overview) · [Sterility](#sterility) · [Features](#features) · [Build](#build) · [AWS flavor](#aws-flavor) · [Releases](#releases) · [Running locally](#running-locally) · [Configuration](#configuration) · [Requirements](#requirements) · [License](#license)
+
+## Why this exists
+
+Every serious server OS ships an official cloud image. OpenBSD doesn't, even though it's exactly what you'd reach for when a small, audited base and correctness actually matter. Running it in the cloud should be a non-event; instead it's nearly impossible to even get started. This repo closes that gap the practical way: sterile raw images with a built-in cloud-init client, that boot on real cloud hardware and take your SSH key and hostname from instance metadata on first boot.
 
 ```bash
 # OpenBSD publishes no official cloud image. Build one:
