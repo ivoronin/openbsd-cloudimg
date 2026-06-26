@@ -12,61 +12,43 @@ packer {
 }
 
 variable "version" {
-  type        = string
-  description = "OpenBSD release, e.g. 7.9"
+  type = string
 }
 
 variable "arch" {
-  type        = string
-  description = "Target architecture, e.g. amd64"
-  default     = "amd64"
+  type = string
 }
 
 variable "iso_checksum" {
-  type        = string
-  description = "Pinned installer ISO checksum, e.g. sha256:abc..."
+  type = string
 }
 
 variable "profile" {
-  type        = string
-  description = "Profile: base (minimal) or full (all sets)"
-  default     = "base"
+  type = string
 }
 
 variable "firmware" {
-  type        = string
-  description = "Boot firmware: uefi (GPT) or bios (MBR, amd64 only). arm64 is always uefi."
-  default     = "uefi"
+  type = string
 }
 
 variable "flavor" {
-  type        = string
-  description = "Flavor: generic (stock kernel) or aws (patched kernel)"
-  default     = "generic"
+  type = string
 }
 
 variable "accelerator" {
-  type        = string
-  description = "QEMU accelerator: kvm (CI), tcg, hvf or none"
-  default     = "kvm"
+  type = string
 }
 
 variable "efi_code" {
-  type        = string
-  description = "UEFI firmware CODE for uefi builds (edk2-aarch64-code.fd / edk2-x86_64-code.fd)"
-  default     = ""
+  type = string
 }
 
 variable "efi_vars" {
-  type        = string
-  description = "UEFI firmware VARS template for uefi builds (edk2-arm-vars.fd / edk2-i386-vars.fd)"
-  default     = ""
+  type = string
 }
 
 variable "set_dir" {
-  type        = string
-  description = "Host dir with the site set + SHA256, ridden as cd1 (aws-style targets; empty for generic)"
-  default     = ""
+  type = string
 }
 
 data "sshkey" "install" {
@@ -124,7 +106,7 @@ locals {
 
 source "qemu" "imager" {
   vm_name          = "${local.image_name}.img"
-  output_directory = "output/images/${var.arch}/${var.version}/${var.flavor}/${var.profile}/${var.firmware}"
+  output_directory = "output/images/${local.image_name}"
 
   iso_checksum = var.iso_checksum
   iso_url      = "https://cdn.openbsd.org/pub/OpenBSD/${var.version}/${var.arch}/install${local.tag}.iso"

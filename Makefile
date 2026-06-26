@@ -23,18 +23,24 @@ $(error VER=$(VER) ARCH=$(ARCH) has no ISO checksum in images.json)
 endif
 
 NAME  = openbsd-$(VER)-$(ARCH)-$(FLAVOR)-$(PROFILE)-$(FIRMWARE)
-OUT    = output/images/$(ARCH)/$(VER)/$(FLAVOR)/$(PROFILE)/$(FIRMWARE)
+SETID = openbsd-$(VER)-$(ARCH)-$(FLAVOR)
+OUT    = output/images/$(NAME)
 IMG    = $(OUT)/$(NAME).img
 IMGXZ  = $(OUT)/$(NAME).img.xz
-# The site set the builder produces, ridden as cd1. Keyed by arch/ver/flavor, kept
+# The site set the builder produces, ridden as cd1. Keyed by ver/arch/flavor, kept
 # outside $(OUT) (which -force wipes).
 TAG    = $(subst .,,$(VER))
-SETDIR = output/site/$(ARCH)/$(VER)/$(FLAVOR)
+SETDIR = output/site/$(SETID)
 SITE   = $(SETDIR)/site$(TAG).tgz
 # Only non-generic targets ship a site set.
 SITE_IF = $(if $(filter-out generic,$(FLAVOR)),$(SITE))
 
 SOURCES = imager.pkr.hcl install.conf.pkrtpl cloud-init.pl $(wildcard scripts/*)
+
+# Args common to every packer stage; stage-specific -vars are appended per recipe.
+PACKER_ARGS = -force \
+  -var version=$(VER) -var arch=$(ARCH) -var accelerator=$(ACCEL) \
+  -var efi_code=$(EFI_CODE) -var efi_vars=$(EFI_VARS)
 
 .PHONY: images site test compress clean
 .SUFFIXES:
@@ -51,36 +57,22 @@ test: $(IMG)
 	packer init tester.pkr.hcl
 	@for s in $(TEST_SOURCES); do \
 	  echo "=== test: cloud_init_source=$$s ==="; \
-	  packer build -force -var cloud_init_source=$$s -var image=$(IMG) -var version=$(VER) -var arch=$(ARCH) -var profile=$(PROFILE) -var firmware=$(FIRMWARE) -var accelerator=$(ACCEL) -var efi_code=$(EFI_CODE) -var efi_vars=$(EFI_VARS) tester.pkr.hcl || exit 1; \
+	  packer build $(PACKER_ARGS) -var cloud_init_source=$$s -var image=$(IMG) -var profile=$(PROFILE) -var firmware=$(FIRMWARE) tester.pkr.hcl || exit 1; \
 	done
 
 # The builder VM compiles the kernel and packs the whole sets set + SHA256.
 $(SITE): builder.pkr.hcl builder.conf.pkrtpl flavors/$(FLAVOR)/builder.sh flavors/$(FLAVOR)/install.site \
          $(wildcard flavors/$(FLAVOR)/$(VER)/patches/* flavors/$(FLAVOR)/$(VER)/files/*) images.json
 	packer init builder.pkr.hcl
-	packer build -force \
-	  -var version=$(VER) \
-	  -var arch=$(ARCH) \
-	  -var flavor=$(FLAVOR) \
-	  -var accelerator=$(ACCEL) \
-	  -var iso_checksum=$(ISO_CHECKSUM) \
-	  -var efi_code=$(EFI_CODE) \
-	  -var efi_vars=$(EFI_VARS) \
+	packer build $(PACKER_ARGS) \
+	  -var flavor=$(FLAVOR) -var iso_checksum=$(ISO_CHECKSUM) \
 	  builder.pkr.hcl
 
 $(IMG): $(SOURCES) $(SITE_IF) images.json
 	packer init imager.pkr.hcl
-	packer build -force \
-	  -var version=$(VER) \
-	  -var arch=$(ARCH) \
-	  -var flavor=$(FLAVOR) \
-	  -var profile=$(PROFILE) \
-	  -var firmware=$(FIRMWARE) \
-	  -var accelerator=$(ACCEL) \
-	  -var iso_checksum=$(ISO_CHECKSUM) \
-	  -var efi_code=$(EFI_CODE) \
-	  -var efi_vars=$(EFI_VARS) \
-	  -var set_dir=$(SETDIR) \
+	packer build $(PACKER_ARGS) \
+	  -var flavor=$(FLAVOR) -var profile=$(PROFILE) -var firmware=$(FIRMWARE) \
+	  -var iso_checksum=$(ISO_CHECKSUM) -var set_dir=$(SETDIR) \
 	  imager.pkr.hcl
 
 $(IMGXZ): $(IMG)

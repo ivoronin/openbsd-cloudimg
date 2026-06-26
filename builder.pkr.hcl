@@ -12,45 +12,37 @@ packer {
 }
 
 variable "version" {
-  type        = string
-  description = "OpenBSD release, e.g. 7.9"
+  type = string
 }
 
 variable "arch" {
-  type        = string
-  description = "Target architecture, e.g. amd64"
-  default     = "amd64"
+  type = string
 }
 
 variable "flavor" {
-  type        = string
-  description = "Flavor whose patch-set to apply (e.g. aws)"
+  type = string
 }
 
 variable "iso_checksum" {
-  type        = string
-  description = "Pinned installer ISO checksum"
+  type = string
 }
 
 variable "accelerator" {
-  type    = string
-  default = "kvm"
+  type = string
 }
 
 variable "efi_code" {
-  type    = string
-  default = ""
+  type = string
 }
 
 variable "efi_vars" {
-  type    = string
-  default = ""
+  type = string
 }
 
+# vCPUs for the builder; 4 beats 8 under hvf (emulated GIC = timer/IPI VM-exit storm). Bump on a KVM host.
 variable "cpus" {
-  type        = number
-  description = "vCPUs for the builder; 4 beats 8 under hvf (emulated GIC = timer/IPI VM-exit storm). Bump on a KVM host."
-  default     = 4
+  type = number
+  default = 4
 }
 
 # Throwaway builder VM with the comp toolchain; never shipped, so SSH provisioning is fine.
@@ -60,6 +52,7 @@ data "sshkey" "builder" {
 
 locals {
   tag = replace(var.version, ".", "")
+  set_id = "openbsd-${var.version}-${var.arch}-${var.flavor}"
   # arm64 builder is UEFI; amd64 builder is BIOS - the proven boot path (the amd64
   # install.iso boots BIOS), and the throwaway builder's firmware never ships anyway.
   use_efi = var.arch == "arm64"
@@ -87,7 +80,7 @@ locals {
 
 source "qemu" "builder" {
   vm_name          = "builder-${var.version}-${var.arch}-${var.flavor}.img"
-  output_directory = "output/builder/${var.arch}/${var.version}/${var.flavor}"
+  output_directory = "output/builder/${local.set_id}"
 
   iso_checksum    = var.iso_checksum
   iso_url         = "https://cdn.openbsd.org/pub/OpenBSD/${var.version}/${var.arch}/install${local.tag}.iso"
@@ -107,8 +100,8 @@ source "qemu" "builder" {
   qemuargs          = local.qemuargs[var.arch]
   accelerator       = var.accelerator
   disk_size         = "40G"
-  disk_interface    = var.arch == "arm64" ? "virtio-scsi" : "virtio"
-  cdrom_interface   = var.arch == "arm64" ? "virtio-scsi" : ""
+  disk_interface    = local.use_efi ? "virtio-scsi" : "virtio"
+  cdrom_interface   = local.use_efi ? "virtio-scsi" : ""
   cpus              = var.cpus
   memory            = 8192
   headless          = true
@@ -125,8 +118,8 @@ source "qemu" "builder" {
   ssh_username         = "root"
   ssh_timeout          = "20m"
 
-  vnc_port_min = 5901
-  vnc_port_max = 5901
+  vnc_port_min = 5900
+  vnc_port_max = 5900
 }
 
 build {
@@ -146,11 +139,11 @@ build {
   provisioner "file" {
     direction   = "download"
     source      = "/home/site/site${local.tag}.tgz"
-    destination = "output/site/${var.arch}/${var.version}/${var.flavor}/"
+    destination = "output/site/${local.set_id}/"
   }
   provisioner "file" {
     direction   = "download"
     source      = "/home/site/SHA256"
-    destination = "output/site/${var.arch}/${var.version}/${var.flavor}/"
+    destination = "output/site/${local.set_id}/"
   }
 }

@@ -79,8 +79,7 @@ jobs:
             ARCH="${{ matrix.build.arch }}" \
             FLAVOR="${{ matrix.build.flavor }}" \
             PROFILE="${{ matrix.build.profile }}" \
-            FIRMWARE="${{ matrix.build.firmware }}" \
-            ISO_CHECKSUM="${{ matrix.build.iso_checksum }}"
+            FIRMWARE="${{ matrix.build.firmware }}"
 
       - name: Test image
         run: |
@@ -106,7 +105,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: openbsd-${{ matrix.build.version }}-${{ matrix.build.arch }}-${{ matrix.build.flavor }}-${{ matrix.build.profile }}-${{ matrix.build.firmware }}
-          path: output/images/${{ matrix.build.arch }}/${{ matrix.build.version }}/${{ matrix.build.flavor }}/${{ matrix.build.profile }}/${{ matrix.build.firmware }}/*.img.xz
+          path: output/images/*/*.img.xz
           if-no-files-found: error
 
   release:

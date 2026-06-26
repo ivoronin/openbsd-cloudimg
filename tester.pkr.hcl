@@ -12,48 +12,39 @@ packer {
 }
 
 variable "image" {
-  type        = string
-  description = "Path to the built raw .img to test"
+  type = string
 }
 
 variable "accelerator" {
-  type    = string
-  default = "kvm"
+  type = string
 }
 
 variable "arch" {
-  type    = string
-  default = "amd64"
+  type = string
 }
 
 variable "version" {
-  type    = string
-  default = "7.9"
+  type = string
 }
 
 variable "profile" {
-  type    = string
-  default = "base"
+  type = string
 }
 
 variable "firmware" {
-  type    = string
-  default = "uefi"
+  type = string
 }
 
 variable "efi_code" {
-  type    = string
-  default = ""
+  type = string
 }
 
 variable "efi_vars" {
-  type    = string
-  default = ""
+  type = string
 }
 
 variable "cloud_init_source" {
-  type    = string
-  default = "imds"
+  type = string
 }
 
 data "sshkey" "test" {
@@ -98,7 +89,7 @@ locals {
 # IMDS work - there is no other way into the cleaned image.
 source "qemu" "tester" {
   vm_name          = "tester"
-  output_directory = "output/tester/${var.arch}/${var.version}/${var.profile}/${var.firmware}"
+  output_directory = "output/tester/${trimsuffix(basename(var.image), ".img")}"
 
   disk_image       = true
   iso_url          = var.image
