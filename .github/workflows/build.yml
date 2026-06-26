@@ -2,8 +2,7 @@ name: build
 
 on:
   push:
-    branches: [main]
-  pull_request:
+    branches: [measure-arm64-aws]
   workflow_dispatch:
 
 permissions:
@@ -23,8 +22,8 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - id: gen
         run: |
-          # Build matrix: amd64 x {generic,aws} flavor x {uefi,bios} firmware, base profile.
-          echo "builds=$(jq -c '[.[] as $i | select($i.arch=="amd64") | ("generic","aws") as $f | ("uefi","bios") as $fw | {version:$i.version,arch:$i.arch,iso_checksum:$i.iso_checksum,flavor:$f,profile:"base",firmware:$fw}]' images.json)" >> "$GITHUB_OUTPUT"
+          # Timing experiment: arm64 aws base uefi only (one job), to measure build time.
+          echo "builds=$(jq -c '[.[] as $i | select($i.arch=="arm64") | {version:$i.version,arch:$i.arch,iso_checksum:$i.iso_checksum,flavor:"aws",profile:"base",firmware:"uefi"}]' images.json)" >> "$GITHUB_OUTPUT"
           echo "timestamp=$(date -u +%Y%m%d%H%M)" >> "$GITHUB_OUTPUT"
           echo "gitref=${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
 
@@ -82,6 +81,7 @@ jobs:
             FIRMWARE="${{ matrix.build.firmware }}"
 
       - name: Test image
+        if: false # timing experiment: build only
         run: |
           make test \
             VER="${{ matrix.build.version }}" \
