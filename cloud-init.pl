@@ -2,7 +2,7 @@
 use strict;
 use warnings;
 use Fcntl qw(O_RDONLY SEEK_SET);
-use File::Temp qw(tempdir);
+use File::Temp qw(tempdir tempfile);
 use CPAN::Meta::YAML;
 use HTTP::Tiny;
 
@@ -14,14 +14,24 @@ my ($uid, $gid, $home) = (getpwnam 'openbsd')[2, 3, 7];
 sub hostname_ok { defined $_[0] && length $_[0] && $_[0] !~ /[^A-Za-z0-9.-]/ }
 
 # ---- data sources ------------------------------------------------------
-# Each returns { source => $name, keys => \@keys, hostname => $h } if its
-# medium yielded something usable, else undef so selection falls through.
+# Each returns { source => $name, keys => \@keys, hostname => $h,
+# user_data => $s } if its medium yielded something usable, else undef so
+# selection falls through.
 
 # Pack a source's findings (tagged with its name) into that contract, or undef
-# if it found nothing usable (no keys and no valid hostname).
+# if it found nothing usable.
 sub config {
-    my ($source, $keys, $host) = @_;
-    return @$keys || hostname_ok($host) ? { source => $source, keys => $keys, hostname => $host } : undef;
+    my ($source, $keys, $host, $user_data) = @_;
+    return @$keys || hostname_ok($host) || length($user_data // '')
+        ? { source => $source, keys => $keys, hostname => $host, user_data => $user_data }
+        : undef;
+}
+
+sub slurp {
+    my ($path) = @_;
+    open my $fh, '<', $path or return;
+    local $/;
+    return scalar <$fh>;
 }
 
 # The disk whose ISO9660 volume label is exactly CIDATA, else undef. Reads the
@@ -46,18 +56,19 @@ sub nocloud {
     my $dev = cidata_disk() // return;
     my $mnt = tempdir(CLEANUP => 1);   # private mount point, auto-removed
     system('mount', '-t', 'cd9660', '-r', "/dev/${dev}c", $mnt) == 0 or return;
+    my $user_data = slurp("$mnt/user-data");
     my $doc = eval {
         open my $fh, '<', "$mnt/meta-data" or die;
         local $/;
         CPAN::Meta::YAML->read_string(scalar <$fh>)->[0];
     };
     system('umount', $mnt);
-    return unless ref $doc eq 'HASH';
+    return config('nocloud', [], undef, $user_data) unless ref $doc eq 'HASH';
     # Trust the parsed list (the data source is root-equivalent); drop only
     # obvious breakage so a malformed file can't write junk to authorized_keys.
     my $pk = $doc->{'public-keys'};
     my @keys = grep { defined && !ref && /\S/ } (ref $pk eq 'ARRAY' ? @$pk : ());
-    return config('nocloud', \@keys, $doc->{'local-hostname'});
+    return config('nocloud', \@keys, $doc->{'local-hostname'}, $user_data);
 }
 
 # timeout 15: give up if the IMDS does not answer within 15s, so an
@@ -65,14 +76,17 @@ sub nocloud {
 sub imds_get {
     my $r = HTTP::Tiny->new(timeout => 15)->get("$IMDS_BASE/$_[0]");
     return unless $r->{success};
-    (my $v = $r->{content}) =~ s/^\s+|\s+$//g;
-    return length $v ? $v : ();
+    return $r->{content};
 }
 
 sub imds {
     my @keys = imds_get('meta-data/public-keys/0/openssh-key');
+    s/^\s+|\s+$//g for @keys;
+    @keys = grep length, @keys;
     my ($host) = imds_get('meta-data/local-hostname');
-    return config('imds', \@keys, $host);
+    $host =~ s/^\s+|\s+$//g if defined $host;
+    my $user_data = imds_get('user-data');
+    return config('imds', \@keys, $host, $user_data);
 }
 
 # ---- apply -------------------------------------------------------------
@@ -108,6 +122,25 @@ sub apply_hostname {
     print $out @hosts;
 }
 
+sub run_user_data {
+    my $user_data = shift;
+    return unless length($user_data // '');
+
+    my ($fh, $path) = eval {
+        tempfile('cloud-init-user-data.XXXXXXXX', DIR => '/var/run', UNLINK => 1);
+    };
+    unless ($fh) {
+        warn "cloud-init: cannot write user-data: $!\n";
+        return;
+    }
+    print $fh $user_data;
+    close $fh;
+
+    system('/bin/sh', $path);
+    my $status = $? == -1 ? -1 : $? >> 8;
+    print "cloud-init: user-data exit=$status\n";
+}
+
 # ---- main: first present source wins -----------------------------------
 
 # NoCloud (disk) wins if present; otherwise IMDS. NoCloud-first means a local
@@ -117,3 +150,4 @@ print "cloud-init: ", ($cfg->{source} // 'no data source'), "\n";
 
 apply_keys(@{ $cfg->{keys} })    if $cfg->{keys} && @{ $cfg->{keys} };
 apply_hostname($cfg->{hostname}) if hostname_ok($cfg->{hostname});
+run_user_data($cfg->{user_data});

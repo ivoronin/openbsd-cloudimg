@@ -43,7 +43,7 @@ Identity arrives at first boot from cloud-init (see [Configuration](#configurati
 - Two flavors: `generic` (stock kernel) or `aws` (a custom kernel patched for EC2/Nitro, built in a separate builder VM - see [AWS flavor](#aws-flavor)).
 - Two profiles: `base` (minimal, 10G) and `full` (all sets, 40G).
 - amd64 (BIOS/MBR or UEFI/GPT firmware) and arm64 (UEFI/GPT only).
-- A minimal cloud-init client: ~120 lines of base Perl, nothing from ports.
+- A minimal cloud-init client: ~150 lines of base Perl, nothing from ports.
 - Two metadata sources: a NoCloud (CIDATA) disk, then AWS-style IMDS.
 - Ships fully patched, with syspatch run at build time.
 
@@ -147,7 +147,7 @@ ssh -i id_openbsd openbsd@100.64.0.3
 
 ## Configuration
 
-cloud-init runs from `rc.local`: it installs an SSH key into the `openbsd` account and sets the hostname. That account (wheel group, passwordless `doas`) is created at build time. NoCloud is checked first, then IMDS.
+cloud-init runs from `rc.local`: it installs an SSH key into the `openbsd` account, sets the hostname, and runs any user-data as a script. That account (wheel group, passwordless `doas`) is created at build time. NoCloud is checked first, then IMDS.
 
 NoCloud (CIDATA): attach an ISO9660 disk labeled exactly `CIDATA` with a `meta-data` file:
 
@@ -157,12 +157,13 @@ public-keys:
   - ssh-ed25519 AAAA... user@host
 ```
 
-Only `meta-data` is read; no `user-data` needed.
+`meta-data` is all you need. An optional `user-data` file beside it is run on first boot (the shebang is ignored; it always runs under `/bin/sh`).
 
 IMDS: with no CIDATA disk, cloud-init queries `http://169.254.169.254/latest`:
 
 - `meta-data/public-keys/0/openssh-key`
 - `meta-data/local-hostname`
+- `user-data` (optional; run as a `/bin/sh` script on first boot)
 
 The key goes into `~openbsd/.ssh/authorized_keys` in a managed block, rewritten each boot, leaving your other keys alone; the hostname goes into `/etc/myname` and `/etc/hosts`.
 

@@ -52,7 +52,8 @@ data "sshkey" "test" {
 }
 
 locals {
-  use_efi = var.arch == "arm64" || var.firmware == "uefi"
+  use_efi   = var.arch == "arm64" || var.firmware == "uefi"
+  user_data = "#!/bin/sh\necho ${var.cloud_init_source} > /tmp/cloud-init-user-data-source\n"
   qemu_binary = {
     amd64 = "qemu-system-x86_64"
     arm64 = "qemu-system-aarch64"
@@ -108,6 +109,7 @@ source "qemu" "tester" {
   http_content = var.cloud_init_source == "imds" ? {
     "/latest/meta-data/public-keys/0/openssh-key" = data.sshkey.test.public_key
     "/latest/meta-data/local-hostname"            = "tester"
+    "/latest/user-data"                           = local.user_data
   } : {}
 
   # cidata: Packer builds a CIDATA-labeled ISO9660 from this content and attaches
@@ -116,6 +118,7 @@ source "qemu" "tester" {
   cd_label = var.cloud_init_source == "cidata" ? "CIDATA" : null
   cd_content = var.cloud_init_source == "cidata" ? {
     "meta-data" = "local-hostname: tester\npublic-keys:\n  - ${data.sshkey.test.public_key}\n"
+    "user-data" = local.user_data
   } : null
 
   qemuargs = concat(local.arch_qemuargs[var.arch], local.net_qemuargs)
@@ -138,6 +141,10 @@ build {
     inline = [<<-EOT
       if [ "$(hostname)" != tester ]; then
         echo "hostname is '$(hostname)', expected tester" >&2
+        exit 1
+      fi
+      if [ "$(cat /tmp/cloud-init-user-data-source)" != "${var.cloud_init_source}" ]; then
+        echo "user-data did not run for ${var.cloud_init_source}" >&2
         exit 1
       fi
       echo "test checks passed"
