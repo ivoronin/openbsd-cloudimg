@@ -13,12 +13,35 @@ src=$tdir/$ver
 stage=/home/site
 tag=$(echo "$ver" | tr -d .)
 
-# Fetch and signify-verify the kernel source (base ships the release pubkey).
+# Fetch and signify-verify the full source tree (base ships the release pubkey).
+# We need src + sys, not just sys: a kernel erratum can patch both sys/ and a
+# userland file in one diff, so every target must exist; we build only the kernel.
+mirror="https://cdn.openbsd.org/pub/OpenBSD"
+key="/etc/signify/openbsd-$tag-base.pub"
 cd /usr/src
-ftp -V -o SHA256.sig "https://cdn.openbsd.org/pub/OpenBSD/$ver/SHA256.sig"
-ftp -V -o sys.tar.gz "https://cdn.openbsd.org/pub/OpenBSD/$ver/sys.tar.gz"
-signify -C -p "/etc/signify/openbsd-$tag-base.pub" -x SHA256.sig sys.tar.gz
-tar xzf sys.tar.gz && rm -f sys.tar.gz SHA256.sig
+ftp -V -o SHA256.sig "$mirror/$ver/SHA256.sig"
+ftp -V -o src.tar.gz "$mirror/$ver/src.tar.gz"
+ftp -V -o sys.tar.gz "$mirror/$ver/sys.tar.gz"
+signify -C -p "$key" -x SHA256.sig src.tar.gz sys.tar.gz
+tar xzf src.tar.gz && tar xzf sys.tar.gz && rm -f src.tar.gz sys.tar.gz SHA256.sig
+
+# Bring the kernel to -stable before our patches: apply published kernel errata
+# (signed source patches) in order. syspatch cannot reach a custom-config kernel,
+# so without this the AWS kernel freezes at the release. Apply only errata that
+# touch sys/ (the kernel ones); skip xenocara/ports/userland. A sys/+userland
+# erratum still applies whole because the full tree is extracted.
+for sig in $(ftp -V -o- "$mirror/patches/$ver/common/" |
+	grep -oE '[0-9]{3}_[A-Za-z0-9_]+\.patch\.sig' | sort -u); do
+	ftp -V -o "/tmp/$sig" "$mirror/patches/$ver/common/$sig"
+	signify -Vep "$key" -x "/tmp/$sig" -m "/tmp/${sig%.sig}"
+	if grep -qE '^(Index: |--- )sys/' "/tmp/${sig%.sig}"; then
+		echo "build: applying kernel erratum $sig"
+		patch -p0 -d /usr/src < "/tmp/${sig%.sig}"
+	else
+		echo "build: skipping non-kernel erratum $sig"
+	fi
+	rm -f "/tmp/$sig" "/tmp/${sig%.sig}"
+done
 
 # Files first (so patches can target them): copy each submodule's sys/ overlay into
 # /usr/src - the openbsd-ena driver mirrors the source tree under sys/dev/pci/.

@@ -3,5 +3,10 @@
     "version": "7.9",
     "arch": "amd64",
     "iso_checksum": "sha256:7a4a92e953618035097c796a90b54424a0f3ae775552e1e7d102cf8a5130449f"
+  },
+  {
+    "version": "7.9",
+    "arch": "arm64",
+    "iso_checksum": "sha256:49786ab82868b6e508a0117c0c1567694a2f6b46caf8972c726868617b8c22fb"
   }
 ]

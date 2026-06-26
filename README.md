@@ -51,7 +51,7 @@ One `make images` produces one image:
 make images VER=7.9 ARCH=amd64 PROFILE=base
 ```
 
-Output lands at `output/images/<arch>/<version>/<flavor>/<profile>/<firmware>/openbsd-<ver>-<arch>-<flavor>-<profile>-<firmware>.img`. `ARCH` and `ACCEL` default to the build host: native acceleration when the target arch matches, `tcg` when it differs. `FIRMWARE` defaults to `bios` on amd64 (legacy/MBR, boots qemu-SeaBIOS and vmd) and `uefi` on arm64 (its only option); pass `FIRMWARE=uefi` for an amd64 cloud image. Note that an amd64 image is either BIOS/MBR or UEFI/GPT, never both - OpenBSD `installboot` sets up one or the other. Add a release by putting its `installNN.iso` SHA256 in `images.json`.
+Output lands at `output/images/<name>/<name>.img`, where `<name>` is `openbsd-<ver>-<arch>-<flavor>-<profile>-<firmware>`. `ARCH` and `ACCEL` default to the build host: native acceleration when the target arch matches, `tcg` when it differs. `FIRMWARE` defaults to `bios` on amd64 (legacy/MBR, boots qemu-SeaBIOS and vmd) and `uefi` on arm64 (its only option); pass `FIRMWARE=uefi` for an amd64 cloud image. Note that an amd64 image is either BIOS/MBR or UEFI/GPT, never both - OpenBSD `installboot` sets up one or the other. Add a release by putting its `installNN.iso` SHA256 in `images.json`.
 
 `FLAVOR` selects the kernel: `generic` (stock, the default) or `aws` (a custom EC2/Nitro kernel, see [AWS flavor](#aws-flavor)).
 
@@ -79,18 +79,18 @@ Variables:
 
 The `aws` flavor runs a two-stage build: a throwaway builder VM applies the patch-set under `flavors/aws/<ver>/`, builds the `AWS.MP` and `AWS` (SP) kernels into a site set, and the imager installs them as `/bsd` and `/bsd.sp`. So a `base` image ships patched kernels with no compiler installed (`make images FLAVOR=aws PROFILE=base`).
 
-The kernel is GENERIC minus GPU/drm (mostly to speed up builds), with EC2/Nitro fixes on top: the `nvme(4)` MQES clamp EBS NVMe needs, a PCIe-bridge patch, and a bundled (still WIP) ENA driver. It's built under a custom config, so `uname` stays honest and syspatch's kernel errata miss it - only userland errata land; a kernel CVE means a rebuilt image (`generic` gets them in place via syspatch as usual). KARL is preserved - relink kits for both kernels; boot `/bsd.sp` to dodge an MP-only bug.
+The kernel is GENERIC minus GPU/drm (mostly to speed up builds), with EC2/Nitro fixes on top: the `nvme(4)` MQES clamp EBS NVMe needs, a PCIe-bridge patch, and a bundled (still WIP) ENA driver. It's built under a custom config, so `uname` stays honest. The kernel carries the published kernel errata (applied to the source before our patches), so it ships fully patched; but syspatch can't reach a custom-config kernel in place, so a kernel CVE released after the build means a rebuilt image (`generic` gets those via syspatch as usual). KARL is preserved - relink kits for both kernels; boot `/bsd.sp` to dodge an MP-only bug.
 
 ## Releases
 
-CI builds the matrix (release × arch × flavor, `base` profile, uefi firmware), tests both metadata sources, and publishes attested images to [Releases](https://github.com/ivoronin/openbsd-cloudimg/releases). Inputs are pinned for reproducibility: installer ISO checksums, the Packer version, and SHA-pinned actions.
+CI builds the matrix (each pinned release on amd64, `generic` and `aws` flavors, `uefi` and `bios` firmware, `base` profile), tests both metadata sources, and publishes attested images to [Releases](https://github.com/ivoronin/openbsd-cloudimg/releases). Inputs are pinned for reproducibility: installer ISO checksums, the Packer version, and SHA-pinned actions.
 
 ```bash
 gh release download -R ivoronin/openbsd-cloudimg -p 'openbsd-7.9-amd64-generic-base-uefi-*.img.xz'
 gh attestation verify openbsd-7.9-amd64-generic-base-uefi-*.img.xz --repo ivoronin/openbsd-cloudimg
 ```
 
-Assets are named `openbsd-<ver>-<arch>-<flavor>-<profile>-<firmware>-<gitref>-<timestamp>.img.xz`. The release matrix builds the `generic` flavor; `aws` images are built on demand (`make images FLAVOR=aws`).
+Assets are named `openbsd-<ver>-<arch>-<flavor>-<profile>-<firmware>-<gitref>-<timestamp>.img.xz`. The release matrix builds both `generic` and `aws` flavors, each in `uefi` and `bios`.
 
 ## Running locally
 
