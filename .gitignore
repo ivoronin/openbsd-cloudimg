@@ -1,2 +1,7 @@
 packer_cache
+iso
 output
+.worklog
+*.log
+docs/superpowers
+__pycache__

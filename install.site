@@ -1,0 +1,48 @@
+#!/bin/ksh
+# Run by the installer as chroot /mnt /install.site at the end of the install.
+set -e
+
+install -m 755 /cloud-tini.pl /usr/local/sbin/cloud-tini
+rm -f /cloud-tini.pl
+echo /usr/local/sbin/cloud-tini >> /etc/rc.local
+
+useradd -G wheel -m openbsd
+echo "permit keepenv nopass :wheel" > /etc/doas.conf
+
+for _if in vio0 ena0 xnf0 hvn0 vmx0; do
+	echo 'inet autoconf' > /etc/hostname.$_if
+done
+chmod 640 /etc/hostname.*
+
+serial_tty='tty00 "/usr/libexec/getty std.115200" vt220 on secure'
+awk -v line="$serial_tty" '
+	$1 == "tty00" {
+		if (!done)
+			print line
+		done = 1
+		next
+	}
+	{ print }
+	END {
+		if (!done)
+			print line
+	}
+' /etc/ttys > /etc/ttys.new
+mv /etc/ttys.new /etc/ttys
+
+for tgz in /*.tgz; do
+	[ -e "$tgz" ] || continue
+	name=${tgz##*/}
+	dir="/tmp/bundle.${name%.tgz}"
+	rm -rf "$dir"
+	mkdir -p "$dir"
+	tar -C "$dir" -xzpf "$tgz"
+	[ -x "$dir/install.sh" ] || {
+		echo "install.site: $name has no executable install.sh" >&2
+		exit 1
+	}
+	(cd "$dir" && ./install.sh)
+	rm -rf "$dir" "$tgz"
+done
+
+rm -f /install.site

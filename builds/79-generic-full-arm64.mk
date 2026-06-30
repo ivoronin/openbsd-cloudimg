@@ -1,0 +1,10 @@
+BUILD_ARCH = arm64
+BUILD_FIRMWARE = uefi
+OPENBSD_TAG = 79
+
+SETS = *
+DISK_SIZE = 40G
+
+ISO_URL = https://cdn.openbsd.org/pub/OpenBSD/7.9/arm64/install79.iso
+ISO_CHECKSUM = sha256:49786ab82868b6e508a0117c0c1567694a2f6b46caf8972c726868617b8c22fb
+ISO_SETS_PATH = 7.9/arm64

@@ -1,0 +1,161 @@
+name: build
+
+on:
+  pull_request:
+  workflow_dispatch:
+  push:
+    tags:
+      - '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'
+      - '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].*'
+
+permissions:
+  contents: read
+
+env:
+  PACKER_VERSION: 1.15.4
+  UV_VERSION: 0.11.25
+
+jobs:
+  setup:
+    runs-on: ubuntu-24.04
+    outputs:
+      builds: ${{ steps.gen.outputs.builds }}
+      timestamp: ${{ steps.gen.outputs.timestamp }}
+      gitref: ${{ steps.gen.outputs.gitref }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Validate release tag
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        run: |
+          if ! printf '%s\n' "$GITHUB_REF_NAME" | grep -Eq '^[0-9]{8}(\.[0-9]+)?$'; then
+            echo "release tag must be YYYYMMDD or YYYYMMDD.N, got: $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+      - name: Install uv
+        run: |
+          python3 -m pip install --user "uv==${UV_VERSION}"
+          "$HOME/.local/bin/uv" --version
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - id: gen
+        run: |
+          {
+            echo "builds=$(make matrix)"
+            echo "timestamp=$(date -u +%Y%m%d%H%M)"
+            echo "gitref=${GITHUB_SHA:0:7}"
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: setup
+    runs-on: ubuntu-24.04
+    name: ${{ matrix.build }}
+    # packer init resolves plugins through the GitHub API; authenticate so the
+    # parallel matrix does not exhaust the 60/hr unauthenticated limit that is
+    # shared across all jobs on a runner's egress IP.
+    env:
+      PACKER_GITHUB_API_TOKEN: ${{ github.token }}
+    strategy:
+      fail-fast: false
+      matrix:
+        build: ${{ fromJSON(needs.setup.outputs.builds) }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Install uv
+        run: |
+          python3 -m pip install --user "uv==${UV_VERSION}"
+          "$HOME/.local/bin/uv" --version
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # GHA runners expose /dev/kvm but gate it behind the kvm group, which the
+      # runner user is not a member of. This udev rule opens the device so qemu
+      # can use -accel kvm without sudo. Standard recipe (actions/runner-images#8542).
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install QEMU and Packer
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 qemu-system-arm qemu-efi-aarch64 qemu-utils pigz netcat-openbsd xorriso curl
+          wget -q "https://releases.hashicorp.com/packer/${PACKER_VERSION}/packer_${PACKER_VERSION}_linux_amd64.zip"
+          sudo unzip -o "packer_${PACKER_VERSION}_linux_amd64.zip" -d /usr/local/bin
+          packer version
+
+      - name: Cache OpenBSD ISO
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: iso
+          key: openbsd-iso-${{ matrix.build }}-${{ hashFiles('builds/*.mk') }}
+
+      - name: Build image
+        run: |
+          make build \
+            BUILD="${{ matrix.build }}"
+
+      - name: Test image
+        run: |
+          make test \
+            BUILD="${{ matrix.build }}"
+
+      - name: Upload test console logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ matrix.build }}-test-console
+          path: output/tests/*/*/console.log
+          if-no-files-found: warn
+
+      - name: Compress image
+        run: |
+          make compress \
+            BUILD="${{ matrix.build }}"
+
+      - name: Stamp image archive
+        env:
+          GITREF: ${{ needs.setup.outputs.gitref }}
+          TS: ${{ needs.setup.outputs.timestamp }}
+        run: |
+          for f in output/images/*/*.tar.gz; do
+            mv "$f" "${f%.tar.gz}-${GITREF}-${TS}.tar.gz"
+          done
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ matrix.build }}
+          path: output/images/*/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    needs: [setup, build]
+    if: ${{ startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GITREF: ${{ needs.setup.outputs.gitref }}
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-path: dist/*.tar.gz
+
+      - name: Publish release
+        run: |
+          gh release create "$RELEASE_TAG" dist/*.tar.gz \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "OpenBSD images $RELEASE_TAG" \
+            --notes "OpenBSD cloud images built from commit \`$GITREF\`"
