@@ -124,6 +124,15 @@ packer build \
   publish-aws.pkr.hcl
 ```
 
+## Supported instance families
+
+Support is per instance family. Known to work (release `20260707`): all arm64
+Graviton (`t4g`, `c6g`, `c7g`, `c8g`, `c9g`, …) and recent amd64 Intel (`c7i`,
+`c8i`). Not yet working: older amd64 Intel (`c5`, `c6i` — ENA can't assign its
+MSI-X table BAR) and all amd64 AMD (`c6a`, `c7a`, `c8a` — kernel protection fault
+in `tsc_identify` at boot). When in doubt, boot one and check the serial console
+for the `ena0` attach line and a DHCP lease.
+
 ## Publish to GCE via GCS
 
 You need Packer 1.15.4 or newer, `gcloud`, Google credentials available to Packer, and an existing GCS bucket. GCE imports the release `.tar.gz` as-is, so keep the archive intact and do not extract it.
