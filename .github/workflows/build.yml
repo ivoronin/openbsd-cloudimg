@@ -3,6 +3,21 @@ name: build
 on:
   pull_request:
   workflow_dispatch:
+    inputs:
+      build:
+        description: "Build to run"
+        required: false
+        default: "79-generic-base-amd64"
+        type: choice
+        options:
+          - 79-aws-base-amd64
+          - 79-aws-base-arm64
+          - 79-aws-full-amd64
+          - 79-aws-full-arm64
+          - 79-generic-base-amd64
+          - 79-generic-base-arm64
+          - 79-generic-full-amd64
+          - 79-generic-full-arm64
   push:
     tags:
       - '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'
@@ -37,9 +52,16 @@ jobs:
           "$HOME/.local/bin/uv" --version
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - id: gen
+        env:
+          SELECT_BUILD: ${{ inputs.build || '' }}
         run: |
+          if [ -n "$SELECT_BUILD" ]; then
+            builds="[\"$SELECT_BUILD\"]"
+          else
+            builds="$(make matrix)"
+          fi
           {
-            echo "builds=$(make matrix)"
+            echo "builds=$builds"
             echo "timestamp=$(date -u +%Y%m%d%H%M)"
             echo "gitref=${GITHUB_SHA:0:7}"
           } >> "$GITHUB_OUTPUT"
