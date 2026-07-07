@@ -11,4 +11,4 @@ ISO_SETS_PATH = 7.9/amd64
 
 BUNDLE_NAMES = 79-000-amd64-dev.tgz
 BUNDLE_URL.79-000-amd64-dev.tgz = file://$(CURDIR)/output/bundles/79-000-amd64-dev.tgz
-BUNDLE_SHA256.79-000-amd64-dev.tgz = 58a133cb17c43c42d285999f5e8b2f3ce03f62216bff3df7cfdea1c2fa499c7b
+BUNDLE_SHA256.79-000-amd64-dev.tgz = 80ed5a056610fc2ff1e509f9ce347466049f11b2ee2f4873f2ad9d5d483629e8
