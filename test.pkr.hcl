@@ -79,6 +79,9 @@ locals {
   serial_qemuargs = [
     ["-serial", "file:${var.console_log}"],
   ]
+  cidata_qemuargs = var.cloud_tini_source == "cidata" ? [
+    ["-device", "virtio-blk-pci,drive=cdrom0,addr=0x8"],
+  ] : []
   # arm64 "virt" needs a CPU model (host passthrough under kvm/hvf, but tcg
   # emulation rejects -cpu host, so a concrete core there). It also has no default
   # display or PS/2 keyboard; add a virtio-gpu framebuffer and a USB keyboard so
@@ -124,6 +127,7 @@ source "qemu" "tester" {
   iso_checksum     = "none"
   skip_resize_disk = true
   disk_interface   = "virtio"
+  cdrom_interface  = "none"
   format           = "raw"
 
   qemu_binary       = local.qemu_binary[var.arch]
@@ -145,7 +149,7 @@ source "qemu" "tester" {
     "user-data" = local.user_data
   } : null
 
-  qemuargs = concat(local.arch_qemuargs[var.arch], local.serial_qemuargs, local.net_qemuargs)
+  qemuargs = concat(local.arch_qemuargs[var.arch], local.serial_qemuargs, local.cidata_qemuargs, local.net_qemuargs)
 
   ssh_username         = "openbsd"
   ssh_private_key_file = data.sshkey.test.private_key_path
