@@ -18,12 +18,22 @@ on:
           - 79-generic-base-arm64
           - 79-generic-full-amd64
           - 79-generic-full-arm64
+      kernel_run_id:
+        description: "openbsd-kernel-aws workflow run ID to download a dev bundle from"
+        required: false
+        type: string
+      kernel_artifact:
+        description: "openbsd-kernel-aws artifact name"
+        required: false
+        default: "79-000-amd64-dev"
+        type: string
   push:
     tags:
       - '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'
       - '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].*'
 
 permissions:
+  actions: read
   contents: read
 
 env:
@@ -110,6 +120,20 @@ jobs:
         with:
           path: iso
           key: openbsd-iso-${{ matrix.build }}-${{ hashFiles('builds/*.mk') }}
+
+      - name: Download dev kernel bundle
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.kernel_run_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KERNEL_RUN_ID: ${{ inputs.kernel_run_id }}
+          KERNEL_ARTIFACT: ${{ inputs.kernel_artifact }}
+        run: |
+          mkdir -p output/bundles
+          gh run download "$KERNEL_RUN_ID" \
+            -R ivoronin/openbsd-kernel-aws \
+            -n "$KERNEL_ARTIFACT" \
+            -D output/bundles
+          ls -l output/bundles
 
       - name: Build image
         run: |
