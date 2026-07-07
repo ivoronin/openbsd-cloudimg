@@ -89,9 +89,15 @@ $(IMAGE): image.pkr.hcl install.conf.pkrtpl $(SITE)
 
 test: $(IMAGE)
 	packer init test.pkr.hcl
+	@rm -rf "output/tests/$(IMAGE_NAME_DEFAULT)"
 	@for s in imds cidata gce; do \
+	  test_dir="output/tests/$(IMAGE_NAME_DEFAULT)/$$s"; \
+	  console_log="$$test_dir/console.log"; \
+	  work_dir="$$test_dir/work"; \
 	  echo "=== test: cloud_tini_source=$$s ==="; \
-	  packer build -force $(TEST_PACKER_VARS) $(QEMU_PACKER_VARS) -var "cloud_tini_source=$$s" -var 'image=$(IMAGE)' test.pkr.hcl || exit 1; \
+	  mkdir -p "$$test_dir"; \
+	  packer build -force $(TEST_PACKER_VARS) $(QEMU_PACKER_VARS) -var "cloud_tini_source=$$s" -var "console_log=$$console_log" -var "work_dir=$$work_dir" -var 'image=$(IMAGE)' test.pkr.hcl || exit 1; \
+	  rm -rf "$$work_dir"; \
 	done
 
 compress: $(ARCHIVE)

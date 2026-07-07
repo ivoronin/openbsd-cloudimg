@@ -43,6 +43,14 @@ variable "cloud_tini_source" {
   type = string
 }
 
+variable "console_log" {
+  type = string
+}
+
+variable "work_dir" {
+  type = string
+}
+
 data "sshkey" "test" {
   type = "ed25519"
 }
@@ -69,7 +77,7 @@ locals {
     ["-device", "virtio-net,netdev=n0"],
   ]
   serial_qemuargs = [
-    ["-serial", "file:{{ .OutputDir }}/console.log"],
+    ["-serial", "file:${var.console_log}"],
   ]
   # arm64 "virt" needs a CPU model (host passthrough under kvm/hvf, but tcg
   # emulation rejects -cpu host, so a concrete core there). It also has no default
@@ -109,7 +117,7 @@ locals {
 # IMDS work - there is no other way into the cleaned image.
 source "qemu" "tester" {
   vm_name          = "tester"
-  output_directory = "output/tests/${var.image_name}/${var.cloud_tini_source}"
+  output_directory = var.work_dir
 
   disk_image       = true
   iso_url          = var.image
