@@ -124,12 +124,12 @@ packer build \
   publish-aws.pkr.hcl
 ```
 
-## Supported instance families
+### Supported AWS instance families
 
-Support is per instance family. Release `20260708` was boot-tested on the
-current Nitro matrix we use for AWS e2e: arm64 Graviton `t4g`, `c6g`, `c7g`,
-`c8g`, `c9g`; amd64 Intel `c5`, `c6i`, `c7i`, `c8i`; and amd64 AMD `c6a`,
-`c7a`, `c8a`.
+openbsd-cloudimg was boot-tested on:
+- arm64 Graviton `t4g`, `c6g`, `c7g`, `c8g`, `c9g`
+- amd64 Intel `c5`, `c6i`, `c7i`, `c8i`
+- amd64 AMD `c6a`, `c7a`, `c8a`
 
 ## Publish to GCE via GCS
 
@@ -161,6 +161,15 @@ packer build \
   -var bucket="$BUCKET" \
   publish-gce.pkr.hcl
 ```
+
+### Supported GCE instance families
+
+openbsd-cloudimg was boot-tested on `e2-standard-2`, `n2-standard-2`,
+`c2-standard-4`, and `c2d-standard-2`.
+
+GCE gVNIC-only instance families are a porting target, not a supported GCE path yet.
+This includes Arm VMs and all Gen3+ machine series; the currently verified GCE path
+is the older VirtIO-Net based x86 families listed above.
 
 ## Build locally
 
