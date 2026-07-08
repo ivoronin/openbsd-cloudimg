@@ -60,7 +60,7 @@ You need GitHub CLI `gh`, `tar`, and `gzip`.
 ```bash
 set -euo pipefail
 
-TAG=20260707
+TAG=20260708
 gh release download "$TAG" -R ivoronin/openbsd-cloudimg -p 'openbsd-79-aws-base-amd64-bios-*.tar.gz'
 gh attestation verify openbsd-79-aws-base-amd64-bios-*.tar.gz \
   --repo ivoronin/openbsd-cloudimg \
@@ -81,7 +81,7 @@ After extracting an `aws` artifact, use the Packer template from the same tag to
 ```bash
 set -euo pipefail
 
-TAG=20260707
+TAG=20260708
 curl -fsSLO "https://raw.githubusercontent.com/ivoronin/openbsd-cloudimg/$TAG/publish-aws.pkr.hcl"
 
 export AWS_PROFILE=openbsd-cloudimg-publisher
@@ -101,7 +101,7 @@ For arm64, use the arm64 artifact and register it as a UEFI AMI:
 ```bash
 set -euo pipefail
 
-TAG=20260707
+TAG=20260708
 gh release download "$TAG" -R ivoronin/openbsd-cloudimg -p 'openbsd-79-aws-base-arm64-uefi-*.tar.gz'
 gh attestation verify openbsd-79-aws-base-arm64-uefi-*.tar.gz \
   --repo ivoronin/openbsd-cloudimg \
@@ -126,12 +126,10 @@ packer build \
 
 ## Supported instance families
 
-Support is per instance family. Known to work (release `20260707`): all arm64
-Graviton (`t4g`, `c6g`, `c7g`, `c8g`, `c9g`, …) and recent amd64 Intel (`c7i`,
-`c8i`). Not yet working: older amd64 Intel (`c5`, `c6i` — ENA can't assign its
-MSI-X table BAR) and all amd64 AMD (`c6a`, `c7a`, `c8a` — kernel protection fault
-in `tsc_identify` at boot). When in doubt, boot one and check the serial console
-for the `ena0` attach line and a DHCP lease.
+Support is per instance family. Release `20260708` was boot-tested on the
+current Nitro matrix we use for AWS e2e: arm64 Graviton `t4g`, `c6g`, `c7g`,
+`c8g`, `c9g`; amd64 Intel `c5`, `c6i`, `c7i`, `c8i`; and amd64 AMD `c6a`,
+`c7a`, `c8a`.
 
 ## Publish to GCE via GCS
 
@@ -140,7 +138,7 @@ You need Packer 1.15.4 or newer, `gcloud`, Google credentials available to Packe
 ```bash
 set -euo pipefail
 
-TAG=20260707
+TAG=20260708
 IMAGE_TAG=${TAG//./-}
 gh release download "$TAG" -R ivoronin/openbsd-cloudimg -p 'openbsd-79-generic-base-amd64-bios-*.tar.gz'
 gh attestation verify openbsd-79-generic-base-amd64-bios-*.tar.gz \
